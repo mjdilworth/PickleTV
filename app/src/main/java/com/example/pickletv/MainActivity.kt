@@ -100,23 +100,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun findVideoFile(): File? {
-        // Try different possible locations
+        val fileName = BuildConfig.DEBUG_VIDEO_FILE_NAME
         val possiblePaths = mutableListOf<File>()
 
         // 1. App-specific external cache directory (where the script pushes to)
-        externalCacheDir?.let { possiblePaths.add(File(it, "h-6.mp4")) }
+        externalCacheDir?.let { possiblePaths.add(File(it, fileName)) }
 
         // 2. App cache directory
-        possiblePaths.add(File(cacheDir, "h-6.mp4"))
+        possiblePaths.add(File(cacheDir, fileName))
 
         // 3. App files directory
-        possiblePaths.add(File(filesDir, "h-6.mp4"))
+        possiblePaths.add(File(filesDir, fileName))
 
         // 4. App-specific external files directory
-        getExternalFilesDir(null)?.let { possiblePaths.add(File(it, "h-6.mp4")) }
+        getExternalFilesDir(null)?.let { possiblePaths.add(File(it, fileName)) }
 
         // 5. App files parent directory (for dev builds)
-        filesDir.parentFile?.let { possiblePaths.add(File(it, "h-6.mp4")) }
+        filesDir.parentFile?.let { possiblePaths.add(File(it, fileName)) }
 
         Log.d("MainActivity", "Searching for video in ${possiblePaths.size} locations:")
         for (path in possiblePaths) {
@@ -127,8 +127,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        Log.w("MainActivity", "Video file h-6.mp4 not found in any location")
-        Log.w("MainActivity", "Please run: ./setup_debug_video_fixed.sh")
+        Log.w("MainActivity", "Video file ${fileName} not found in any location")
+        Log.w("MainActivity", "Please run: ./tools/push_video.sh")
         return null
     }
 

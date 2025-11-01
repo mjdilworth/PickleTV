@@ -27,6 +27,9 @@ android {
                 "proguard-rules.pro"
             )
         }
+        debug {
+            buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", '"' + (System.getenv("DEBUG_VIDEO_FILE_NAME") ?: "h-6.mp4") + '"')
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
