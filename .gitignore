@@ -1,15 +1,28 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Android/Gradle build outputs
+/.gradle/
+/build/
+app/build/
+
+# Local SDK/IDE files
 local.properties
+*.iml
+
+# Android Studio project files (keep a minimal set tracked)
+/.idea/*
+!/.idea/codeStyles/
+!/.idea/inspectionProfiles/
+!/.idea/gradle.xml
+!/.idea/misc.xml
+!/.idea/runConfigurations.xml
+
+# Kotlin/IDE caches
+/.kotlin/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Ensure source is always included even if a global ignore matches "main"
+!app/src/
+!app/src/main/
+!app/src/main/**
