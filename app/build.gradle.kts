@@ -17,7 +17,7 @@ android {
         versionCode = 1
         versionName = "1.0"
         // Provide default for all variants
-        buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", '"h-6.mp4"')
+        buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", "\"h-6.mp4\"")
     }
 
     buildTypes {
@@ -29,33 +29,36 @@ android {
             )
         }
         debug {
-            buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", '"' + (System.getenv("DEBUG_VIDEO_FILE_NAME") ?: "h-6.mp4") + '"')
+            val debugVideo = System.getenv("DEBUG_VIDEO_FILE_NAME") ?: "h-6.mp4"
+            buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", "\"$debugVideo\"")
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
     }
 }
 
-// Automatically push/generate a debug video before debug builds
+// Automatically push/generate a debug video before installing debug builds (not on assemble)
 tasks.register<Exec>("prepareDebugVideo") {
     group = "pickletv"
     description = "Generate/push debug video to the emulator/device"
     workingDir(rootDir)
-    // Use the portable script under tools
     commandLine("bash", "${rootDir}/tools/push_video.sh")
 }
 
-// Ensure the script runs before assembling/installing debug variant
-tasks.matching { it.name == "preDebugBuild" }.configureEach {
-    dependsOn("prepareDebugVideo")
+// Hook only into installDebug so builds don't require a device
+// This triggers when the task graph includes installDebug (Android Studio run/debug)
+tasks.configureEach {
+    if (name == "installDebug") {
+        dependsOn("prepareDebugVideo")
+    }
 }
 
 dependencies {
