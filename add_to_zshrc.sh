@@ -1,15 +1,32 @@
-mar#!/bin/zsh
-# Add this to your ~/.zshrc to create a convenient alias
+#!/usr/bin/env bash
+set -euo pipefail
 
-# PickleTV Debug Setup Alias
-alias pickletv-setup="cd /Users/mike/AndroidStudioProjects/PickleTV && ./setup_debug_video.sh"
+# Installer for dev shell aliases (portable, repo-relative)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${SCRIPT_DIR}"
+ALIAS_FILE_REL="tools/dev_aliases.sh"
+ALIAS_FILE="${REPO_ROOT}/${ALIAS_FILE_REL}"
 
-# Optional: Add this for quick logcat viewing
-alias pickletv-logs="adb logcat | grep MainActivity"
+# Create alias file
+mkdir -p "${REPO_ROOT}/tools"
+cat >"${ALIAS_FILE}" <<'EOF'
+# PickleTV dev aliases (source this file)
+ptv-root() { cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"; }
 
-# Optional: Add this to clear device logs before testing
-alias pickletv-clear-logs="adb logcat -c && echo 'Logs cleared'"
+alias ptv-setup='ptv-root; ./tools/push_video.sh'
+alias ptv-logs='adb logcat | grep -E "(MainActivity|ExoPlayer|VideoGLRenderer)"'
+alias ptv-clear-logs='adb logcat -c && echo "Logs cleared"'
+alias ptv-debug='ptv-root; ./tools/push_video.sh && echo && echo "Waiting for logs (Ctrl+C to stop)..." && sleep 1 && adb logcat | grep -E "(MainActivity|ExoPlayer|VideoGLRenderer)"'
+EOF
 
-# Optional: One command to setup + show logs
-alias pickletv-debug="cd /Users/mike/AndroidStudioProjects/PickleTV && ./setup_debug_video.sh && echo '' && echo 'Waiting for logs (press Ctrl+C to stop)...' && sleep 2 && adb logcat | grep MainActivity"
+# Print instructions to add to shell rc (no auto-modify)
+RC_FILE="${HOME}/.zshrc"
+cat <<EOF
+Add the following line to your shell rc (${RC_FILE}) to enable dev aliases:
 
+  source "${ALIAS_FILE}"
+
+Then open a new shell or run:
+
+  source "${RC_FILE}"
+EOF

@@ -45,7 +45,8 @@ tasks.register<Exec>("prepareDebugVideo") {
     group = "pickletv"
     description = "Generate/push debug video to the emulator/device"
     workingDir(rootDir)
-    commandLine("bash", "${rootDir}/setup_debug_video_fixed.sh")
+    // Use the portable script under tools
+    commandLine("bash", "${rootDir}/tools/push_video.sh")
 }
 
 // Ensure the script runs before assembling/installing debug variant
