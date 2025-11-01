@@ -16,7 +16,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-
+        // Provide default for all variants
+        buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", '"h-6.mp4"')
     }
 
     buildTypes {
