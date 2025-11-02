@@ -9,7 +9,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.InputDevice
-import android.view.MotionEvent
 import android.view.Surface
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -17,7 +16,6 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import java.io.File
-import java.util.Locale
 
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
@@ -28,10 +26,15 @@ class MainActivity : ComponentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var currentWarpShape = WarpShape()
-    private val warpAdjustmentStep = 0.05f
 
     private var cornerEditMode: Boolean = false
     private var selectedCorner: Corner = Corner.TOP_LEFT
+    private var overlayGridVisible: Boolean = false
+    private var showStepSizeIndicator: Boolean = false
+
+    // Adjustment step sizes for different modes
+    private var warpAdjustmentStep = 0.05f
+    private var largeAdjustmentStep = 0.20f  // For fast adjustments
 
     private var inputLoggingEnabled: Boolean = true
     private var isDebugBuild: Boolean = false
@@ -154,7 +157,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun logKeyEvent(phase: String, keyCode: Int, event: KeyEvent) {
+    private fun logKeyEvent(keyCode: Int, event: KeyEvent) {
         if (!inputLoggingEnabled) return
         val codeName = KeyEvent.keyCodeToString(keyCode)
         val src = event.source
@@ -168,57 +171,31 @@ class MainActivity : ComponentActivity() {
         val devInfo = if (dev != null) "devId=${dev.id}, name=${dev.name}, vendor=${dev.vendorId}, product=${dev.productId}" else "dev=null"
         Log.d(
             "InputLogger",
-            "$phase code=$keyCode($codeName), scan=${event.scanCode}, repeat=${event.repeatCount}, meta=${event.metaState}, from=[$srcs], $devInfo"
+            "DOWN code=$keyCode($codeName), scan=${event.scanCode}, repeat=${event.repeatCount}, meta=${event.metaState}, from=[$srcs], $devInfo"
         )
-    }
-
-    private fun logMotionEvent(event: MotionEvent): Boolean {
-        if (!inputLoggingEnabled) return false
-        val src = event.source
-        val isJoyLike = (src and (InputDevice.SOURCE_JOYSTICK or InputDevice.SOURCE_GAMEPAD)) != 0
-        if (!isJoyLike) return false
-        val axes = intArrayOf(
-            MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
-            MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
-            MotionEvent.AXIS_RX, MotionEvent.AXIS_RY,
-            MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y,
-            MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER,
-            MotionEvent.AXIS_GAS, MotionEvent.AXIS_BRAKE
-        )
-        val sb = StringBuilder("Axes:")
-        var any = false
-        for (a in axes) {
-            val v = event.getAxisValue(a)
-            if (kotlin.math.abs(v) > 0.1f) {
-                sb.append(" ").append(MotionEvent.axisToString(a)).append("=").append(String.format(Locale.US, "%.2f", v))
-                any = true
-            }
-        }
-        if (any) {
-            val dev = event.device
-            Log.d(
-                "InputLogger",
-                "MOTION src=$src, devId=${dev?.id} name=${dev?.name} — ${sb}"
-            )
-        }
-        return any
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        event?.let { logKeyEvent("DOWN", keyCode, it) }
+        event?.let { logKeyEvent(keyCode, it) }
 
-        // Development-only keyboard aliases
-        if (isDebugBuild && event != null && handleDevKeyAliases(keyCode, event)) {
-            return true
+        // Development-only keyboard aliases and enhanced mappings (CHECK FIRST!)
+        if (isDebugBuild && event != null) {
+            val devResult = handleDevKeyboardMappings(keyCode, event)
+            if (devResult) {
+                return true  // Dev handler handled it
+            }
         }
 
         return when (keyCode) {
+            // ====== LEGACY REMOTE/BUTTON MAPPINGS (Production) ======
+
             // Toggle verbose input logging
             KeyEvent.KEYCODE_F1 -> {
                 inputLoggingEnabled = !inputLoggingEnabled
                 Log.d("InputLogger", "inputLoggingEnabled=$inputLoggingEnabled")
                 true
             }
+
             // Toggle corner edit mode (show/hide corner highlights)
             KeyEvent.KEYCODE_C -> {
                 cornerEditMode = !cornerEditMode
@@ -226,6 +203,7 @@ class MainActivity : ComponentActivity() {
                 Log.d("MainActivity", "Corner edit mode: $cornerEditMode, selected=$selectedCorner")
                 true
             }
+
             // Cycle selected corner (Tab key)
             KeyEvent.KEYCODE_TAB -> {
                 if (event?.isShiftPressed == true) {
@@ -237,6 +215,7 @@ class MainActivity : ComponentActivity() {
                 Log.d("MainActivity", "Selected corner: $selectedCorner")
                 true
             }
+
             // DPAD adjusts either whole warp (legacy) or selected corner when in corner mode
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (cornerEditMode) adjustCorner(selectedCorner, dy = -warpAdjustmentStep) else adjustWarp(WarpAdjustment.TOP_UP)
@@ -254,12 +233,14 @@ class MainActivity : ComponentActivity() {
                 if (cornerEditMode) adjustCorner(selectedCorner, dx = warpAdjustmentStep) else adjustWarp(WarpAdjustment.RIGHT_OUT)
                 true
             }
+
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                 // Save warp shape on confirm
                 warpShapeManager.saveWarpShape(currentWarpShape)
                 Log.d("MainActivity", "Warp shape saved: $currentWarpShape")
                 true
             }
+
             KeyEvent.KEYCODE_DEL -> {
                 // Reset warp shape
                 currentWarpShape = WarpShape()
@@ -268,71 +249,248 @@ class MainActivity : ComponentActivity() {
                 Log.d("MainActivity", "Warp shape reset")
                 true
             }
+
             else -> super.onKeyDown(keyCode, event)
         }
     }
 
-    private fun handleDevKeyAliases(keyCode: Int, event: KeyEvent): Boolean {
-        when (keyCode) {
-            // SPACE toggles play/pause AND toggles edit mode accordingly
+    private fun handleDevKeyboardMappings(keyCode: Int, event: KeyEvent): Boolean {
+        return when (keyCode) {
+            // ====== PLAY / PAUSE CONTROLS ======
+            KeyEvent.KEYCODE_P -> {
+                togglePlayPauseAndEditMode()
+                true
+            }
             KeyEvent.KEYCODE_SPACE -> {
                 togglePlayPauseAndEditMode()
-                return true
+                true
             }
-            // P toggles corner edit mode
-            KeyEvent.KEYCODE_P -> {
-                cornerEditMode = !cornerEditMode
+
+            // ====== DIRECTIONAL CONTROLS (Arrow Keys) ======
+            // Arrow keys map to DPAD for corner adjustment
+            // UP/DOWN = vertical movement, LEFT/RIGHT = horizontal movement
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                Log.d("MainActivity", "[KEY] DPAD_UP pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dy = warpAdjustmentStep)  // UP = positive Y
+                } else {
+                    adjustWarp(WarpAdjustment.TOP_UP)
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                Log.d("MainActivity", "[KEY] DPAD_DOWN pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dy = -warpAdjustmentStep)  // DOWN = negative Y
+                } else {
+                    adjustWarp(WarpAdjustment.BOTTOM_DOWN)
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                Log.d("MainActivity", "[KEY] DPAD_LEFT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
+                } else {
+                    adjustWarp(WarpAdjustment.LEFT_OUT)
+                }
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                Log.d("MainActivity", "[KEY] DPAD_RIGHT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dx = warpAdjustmentStep)
+                } else {
+                    adjustWarp(WarpAdjustment.RIGHT_OUT)
+                }
+                true
+            }
+
+            // ====== CORNER SELECTION & CYCLING ======
+            KeyEvent.KEYCODE_TAB -> {
+                if (event?.isShiftPressed == true) {
+                    selectedCorner = prevCorner(selectedCorner)
+                } else {
+                    selectedCorner = selectedCorner.next()
+                }
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Corner edit mode: $cornerEditMode, selected=$selectedCorner")
-                return true
+                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
+                true
             }
-            // N advances selected corner; Shift+Tab handled in main handler above
+
+            // N advances selected corner
             KeyEvent.KEYCODE_N -> {
                 selectedCorner = selectedCorner.next()
                 glSurfaceView.requestRender()
                 Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                return true
+                true
             }
-            // Direct corner selection with number keys 1..4
-            KeyEvent.KEYCODE_1 -> {
+
+            // Direct corner selection with number keys 1,2,3,4
+            // 1 = TOP_LEFT, 2 = TOP_RIGHT, 3 = BOTTOM_RIGHT, 4 = BOTTOM_LEFT
+            KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
                 selectedCorner = Corner.TOP_LEFT
+                cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                return true
+                Log.d("MainActivity", "[DEV] Snap: TOP_LEFT (1) selected")
+                true
             }
-            KeyEvent.KEYCODE_2 -> {
+            KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
                 selectedCorner = Corner.TOP_RIGHT
+                cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                return true
+                Log.d("MainActivity", "[DEV] Snap: TOP_RIGHT (2) selected")
+                true
             }
-            KeyEvent.KEYCODE_3 -> {
+            KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_NUMPAD_3 -> {
                 selectedCorner = Corner.BOTTOM_RIGHT
+                cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                return true
+                Log.d("MainActivity", "[DEV] Snap: BOTTOM_RIGHT (3) selected")
+                true
             }
-            KeyEvent.KEYCODE_4 -> {
+            KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_NUMPAD_4 -> {
                 selectedCorner = Corner.BOTTOM_LEFT
+                cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                return true
+                Log.d("MainActivity", "[DEV] Snap: BOTTOM_LEFT (4) selected")
+                true
             }
-            // WASD fine adjustments when in corner edit mode
-            KeyEvent.KEYCODE_W -> {
-                if (cornerEditMode) { adjustCorner(selectedCorner, dy = -warpAdjustmentStep); return true }
+
+            // 0 = Center helper (reset all)
+            KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_NUMPAD_0 -> {
+                currentWarpShape = WarpShape()
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Snap: Reset to center")
+                true
             }
-            KeyEvent.KEYCODE_S -> {
-                if (cornerEditMode) { adjustCorner(selectedCorner, dy = warpAdjustmentStep); return true }
+
+            // ====== STEP SIZE CONTROLS (] and [ keys) ======
+            // Right bracket ] increases step size
+            KeyEvent.KEYCODE_RIGHT_BRACKET -> {
+                warpAdjustmentStep = (warpAdjustmentStep + 0.05f).coerceAtMost(0.50f)
+                largeAdjustmentStep = warpAdjustmentStep * 4
+                showStepSizeIndicator = true
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Step size increased: $warpAdjustmentStep")
+                true
             }
-            KeyEvent.KEYCODE_A -> {
-                if (cornerEditMode) { adjustCorner(selectedCorner, dx = -warpAdjustmentStep); return true }
+
+            // Left bracket [ decreases step size
+            KeyEvent.KEYCODE_LEFT_BRACKET -> {
+                warpAdjustmentStep = (warpAdjustmentStep - 0.05f).coerceAtLeast(0.01f)
+                largeAdjustmentStep = warpAdjustmentStep * 4
+                showStepSizeIndicator = true
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Step size decreased: $warpAdjustmentStep")
+                true
             }
-            KeyEvent.KEYCODE_D -> {
-                if (cornerEditMode) { adjustCorner(selectedCorner, dx = warpAdjustmentStep); return true }
+
+            // ====== WHOLE SHAPE MOVEMENT (Page Up/Down) ======
+            // Page Up = Move shape up (vertical adjustment for all corners)
+            KeyEvent.KEYCODE_PAGE_UP -> {
+                currentWarpShape = currentWarpShape.copy(
+                    topLeftY = currentWarpShape.topLeftY + largeAdjustmentStep,
+                    topRightY = currentWarpShape.topRightY + largeAdjustmentStep,
+                    bottomLeftY = currentWarpShape.bottomLeftY + largeAdjustmentStep,
+                    bottomRightY = currentWarpShape.bottomRightY + largeAdjustmentStep
+                )
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Moved shape up: $currentWarpShape")
+                true
+            }
+
+            // Page Down = Move shape down
+            KeyEvent.KEYCODE_PAGE_DOWN -> {
+                currentWarpShape = currentWarpShape.copy(
+                    topLeftY = currentWarpShape.topLeftY - largeAdjustmentStep,
+                    topRightY = currentWarpShape.topRightY - largeAdjustmentStep,
+                    bottomLeftY = currentWarpShape.bottomLeftY - largeAdjustmentStep,
+                    bottomRightY = currentWarpShape.bottomRightY - largeAdjustmentStep
+                )
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Moved shape down: $currentWarpShape")
+                true
+            }
+
+            // ====== OVERLAY GRID / HUD TOGGLE (M key) ======
+            KeyEvent.KEYCODE_M -> {
+                overlayGridVisible = !overlayGridVisible
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Overlay grid: $overlayGridVisible")
+                true
+            }
+
+            // ====== EXIT EDIT MODE (Escape key) ======
+            KeyEvent.KEYCODE_ESCAPE -> {
+                cornerEditMode = false
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Exited edit mode")
+                true
+            }
+
+            // ====== VOLUME +/- FOR HORIZONTAL FRAME MOVEMENT ======
+            // Volume Up = Move entire frame right
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                currentWarpShape = currentWarpShape.copy(
+                    topLeftX = currentWarpShape.topLeftX + warpAdjustmentStep,
+                    topRightX = currentWarpShape.topRightX + warpAdjustmentStep,
+                    bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep,
+                    bottomRightX = currentWarpShape.bottomRightX + warpAdjustmentStep
+                )
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Moved frame right: $currentWarpShape")
+                true
+            }
+
+            // Volume Down = Move entire frame left
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                currentWarpShape = currentWarpShape.copy(
+                    topLeftX = currentWarpShape.topLeftX - warpAdjustmentStep,
+                    topRightX = currentWarpShape.topRightX - warpAdjustmentStep,
+                    bottomLeftX = currentWarpShape.bottomLeftX - warpAdjustmentStep,
+                    bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
+                )
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Moved frame left: $currentWarpShape")
+                true
+            }
+
+            // ====== EDIT MODE TOGGLE (E key) ======
+            KeyEvent.KEYCODE_E -> {
+                cornerEditMode = !cornerEditMode
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Edit mode: $cornerEditMode")
+                true
+            }
+
+            // ====== SAVE / CONFIRM (Enter or Space already handled above) ======
+            KeyEvent.KEYCODE_ENTER -> {
+                warpShapeManager.saveWarpShape(currentWarpShape)
+                Log.d("MainActivity", "[DEV] Warp shape saved: $currentWarpShape")
+                true
+            }
+
+            // ====== RESET (R key) ======
+            KeyEvent.KEYCODE_R -> {
+                currentWarpShape = WarpShape()
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "[DEV] Reset warp shape")
+                true
+            }
+
+            // ====== FINE ADJUSTMENTS (Shift + Arrow keys for smaller steps) ======
+            else -> {
+                // Only handle Shift modifiers for fine adjustments on non-DPAD keys
+                false
             }
         }
-        return false
     }
 
     private fun togglePlayPauseAndEditMode() {
@@ -359,31 +517,23 @@ class MainActivity : ComponentActivity() {
         Corner.TOP_RIGHT -> Corner.TOP_LEFT
     }
 
-    private fun togglePlayPause() {
-        try {
-            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-        } catch (e: Exception) {
-            Log.w("MainActivity", "togglePlayPause failed: ${e.message}")
-        }
-    }
-
     private fun adjustWarp(adjustment: WarpAdjustment) {
         currentWarpShape = when (adjustment) {
             WarpAdjustment.TOP_UP -> currentWarpShape.copy(
-                topLeft = currentWarpShape.topLeft - warpAdjustmentStep,
-                topRight = currentWarpShape.topRight + warpAdjustmentStep
+                topLeftX = currentWarpShape.topLeftX - warpAdjustmentStep,
+                topRightX = currentWarpShape.topRightX + warpAdjustmentStep
             )
             WarpAdjustment.BOTTOM_DOWN -> currentWarpShape.copy(
-                bottomLeft = currentWarpShape.bottomLeft + warpAdjustmentStep,
-                bottomRight = currentWarpShape.bottomRight - warpAdjustmentStep
+                bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep,
+                bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
             )
             WarpAdjustment.LEFT_OUT -> currentWarpShape.copy(
-                topLeft = currentWarpShape.topLeft + warpAdjustmentStep,
-                bottomLeft = currentWarpShape.bottomLeft + warpAdjustmentStep
+                topLeftX = currentWarpShape.topLeftX + warpAdjustmentStep,
+                bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep
             )
             WarpAdjustment.RIGHT_OUT -> currentWarpShape.copy(
-                topRight = currentWarpShape.topRight - warpAdjustmentStep,
-                bottomRight = currentWarpShape.bottomRight - warpAdjustmentStep
+                topRightX = currentWarpShape.topRightX - warpAdjustmentStep,
+                bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
             )
         }
 
@@ -394,29 +544,32 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun adjustCorner(corner: Corner, dx: Float = 0f, dy: Float = 0f) {
-        // Our warp offsets are horizontal per-edge; approximate vertical with opposing edges
+        // Directly adjust the X and Y coordinates of the selected corner
+        // dx = horizontal movement (left/right)
+        // dy = vertical adjustment (up/down)
+        Log.d("MainActivity", ">>> ADJUSTING CORNER: $corner, dx=$dx, dy=$dy")
+
         currentWarpShape = when (corner) {
             Corner.TOP_LEFT -> currentWarpShape.copy(
-                topLeft = currentWarpShape.topLeft + dx,
-                // emulate vertical by tilting top edge inward/outward
-                topRight = currentWarpShape.topRight - dy
+                topLeftX = currentWarpShape.topLeftX + dx,
+                topLeftY = currentWarpShape.topLeftY + dy
             )
             Corner.TOP_RIGHT -> currentWarpShape.copy(
-                topRight = currentWarpShape.topRight + dx,
-                topLeft = currentWarpShape.topLeft + dy
+                topRightX = currentWarpShape.topRightX + dx,
+                topRightY = currentWarpShape.topRightY + dy
             )
             Corner.BOTTOM_LEFT -> currentWarpShape.copy(
-                bottomLeft = currentWarpShape.bottomLeft + dx,
-                bottomRight = currentWarpShape.bottomRight + dy
+                bottomLeftX = currentWarpShape.bottomLeftX + dx,
+                bottomLeftY = currentWarpShape.bottomLeftY + dy
             )
             Corner.BOTTOM_RIGHT -> currentWarpShape.copy(
-                bottomRight = currentWarpShape.bottomRight + dx,
-                bottomLeft = currentWarpShape.bottomLeft - dy
+                bottomRightX = currentWarpShape.bottomRightX + dx,
+                bottomRightY = currentWarpShape.bottomRightY + dy
             )
         }
         renderer.setWarpShape(currentWarpShape)
         glSurfaceView.requestRender()
-        Log.d("MainActivity", "Corner adjusted: $corner, dx=$dx, dy=$dy -> $currentWarpShape")
+        Log.d("MainActivity", "<<< Corner adjusted: $corner, shape: $currentWarpShape")
     }
 
     override fun onPause() {

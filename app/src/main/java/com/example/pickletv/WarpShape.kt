@@ -6,12 +6,17 @@ import android.util.Log
 
 /**
  * Represents a trapezoid warp shape for keystone correction
+ * Stores X,Y coordinates for each of the 4 corners
  */
 data class WarpShape(
-    val topLeft: Float = 0f,      // Top-left corner offset (horizontal)
-    val topRight: Float = 0f,     // Top-right corner offset (horizontal)
-    val bottomLeft: Float = 0f,   // Bottom-left corner offset (horizontal)
-    val bottomRight: Float = 0f   // Bottom-right corner offset (horizontal)
+    val topLeftX: Float = 0f,       // Top-left X offset
+    val topLeftY: Float = 0f,       // Top-left Y offset
+    val topRightX: Float = 0f,      // Top-right X offset
+    val topRightY: Float = 0f,      // Top-right Y offset
+    val bottomLeftX: Float = 0f,    // Bottom-left X offset
+    val bottomLeftY: Float = 0f,    // Bottom-left Y offset
+    val bottomRightX: Float = 0f,   // Bottom-right X offset
+    val bottomRightY: Float = 0f    // Bottom-right Y offset
 )
 
 /**
@@ -23,10 +28,14 @@ class WarpShapeManager(context: Context) {
 
     fun saveWarpShape(warpShape: WarpShape) {
         preferences.edit().apply {
-            putFloat("topLeft", warpShape.topLeft)
-            putFloat("topRight", warpShape.topRight)
-            putFloat("bottomLeft", warpShape.bottomLeft)
-            putFloat("bottomRight", warpShape.bottomRight)
+            putFloat("topLeftX", warpShape.topLeftX)
+            putFloat("topLeftY", warpShape.topLeftY)
+            putFloat("topRightX", warpShape.topRightX)
+            putFloat("topRightY", warpShape.topRightY)
+            putFloat("bottomLeftX", warpShape.bottomLeftX)
+            putFloat("bottomLeftY", warpShape.bottomLeftY)
+            putFloat("bottomRightX", warpShape.bottomRightX)
+            putFloat("bottomRightY", warpShape.bottomRightY)
             apply()
         }
         Log.d("WarpShapeManager", "Saved warp shape: $warpShape")
@@ -34,10 +43,14 @@ class WarpShapeManager(context: Context) {
 
     fun loadWarpShape(): WarpShape {
         return WarpShape(
-            topLeft = preferences.getFloat("topLeft", 0f),
-            topRight = preferences.getFloat("topRight", 0f),
-            bottomLeft = preferences.getFloat("bottomLeft", 0f),
-            bottomRight = preferences.getFloat("bottomRight", 0f)
+            topLeftX = preferences.getFloat("topLeftX", 0f),
+            topLeftY = preferences.getFloat("topLeftY", 0f),
+            topRightX = preferences.getFloat("topRightX", 0f),
+            topRightY = preferences.getFloat("topRightY", 0f),
+            bottomLeftX = preferences.getFloat("bottomLeftX", 0f),
+            bottomLeftY = preferences.getFloat("bottomLeftY", 0f),
+            bottomRightX = preferences.getFloat("bottomRightX", 0f),
+            bottomRightY = preferences.getFloat("bottomRightY", 0f)
         ).also {
             Log.d("WarpShapeManager", "Loaded warp shape: $it")
         }

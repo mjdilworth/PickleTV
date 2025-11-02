@@ -21,26 +21,37 @@ const val VERTEX_SHADER_CODE = """
     
     uniform mat4 projection;
     uniform mat4 texMatrix;
-    uniform float topLeft;
-    uniform float topRight;
-    uniform float bottomLeft;
-    uniform float bottomRight;
+    uniform float topLeftX;
+    uniform float topLeftY;
+    uniform float topRightX;
+    uniform float topRightY;
+    uniform float bottomLeftX;
+    uniform float bottomLeftY;
+    uniform float bottomRightX;
+    uniform float bottomRightY;
     
     void main() {
         vec4 warpedPos = position;
         
-        float normalizedX = position.x;
-        float normalizedY = position.y;
+        // Normalized texture coordinates (0-1)
+        float u = (texCoord.x);  // 0 to 1 across width
+        float v = (1.0 - texCoord.y);  // 0 to 1 across height (flip Y)
         
-        float normalizedY01 = (normalizedY + 1.0) / 2.0;
+        // Bilinear interpolation between corners
+        // Top edge: interpolate between topLeft and topRight
+        float topX = mix(topLeftX, topRightX, u);
+        float topY = mix(topLeftY, topRightY, u);
         
-        float leftOffset = mix(topLeft, bottomLeft, normalizedY01);
-        float rightOffset = mix(topRight, bottomRight, normalizedY01);
+        // Bottom edge: interpolate between bottomLeft and bottomRight
+        float bottomX = mix(bottomLeftX, bottomRightX, u);
+        float bottomY = mix(bottomLeftY, bottomRightY, u);
         
-        float normalizedX01 = (normalizedX + 1.0) / 2.0;
-        float xOffset = mix(leftOffset, rightOffset, normalizedX01);
+        // Interpolate between top and bottom based on v
+        float finalX = mix(topX, bottomX, v);
+        float finalY = mix(topY, bottomY, v);
         
-        warpedPos.x = position.x + xOffset;
+        warpedPos.x = finalX;
+        warpedPos.y = finalY;
         
         gl_Position = projection * warpedPos;
         // Apply SurfaceTexture transform to correct orientation/crop
@@ -83,10 +94,16 @@ class VideoGLRenderer : GLSurfaceView.Renderer {
     private var projectionHandle = 0
     private var texMatrixHandle = 0
     private var videoTextureHandle = 0
-    private var topLeftHandle = 0
-    private var topRightHandle = 0
-    private var bottomLeftHandle = 0
-    private var bottomRightHandle = 0
+
+    // Corner coordinate uniforms (X, Y for each corner)
+    private var topLeftXHandle = 0
+    private var topLeftYHandle = 0
+    private var topRightXHandle = 0
+    private var topRightYHandle = 0
+    private var bottomLeftXHandle = 0
+    private var bottomLeftYHandle = 0
+    private var bottomRightXHandle = 0
+    private var bottomRightYHandle = 0
 
     // Corner highlighting
     private var cornerHighlightProvider: (() -> Pair<Boolean, Corner>)? = null
@@ -163,10 +180,16 @@ class VideoGLRenderer : GLSurfaceView.Renderer {
         projectionHandle = GLES20.glGetUniformLocation(programHandle, "projection")
         texMatrixHandle = GLES20.glGetUniformLocation(programHandle, "texMatrix")
         videoTextureHandle = GLES20.glGetUniformLocation(programHandle, "videoTexture")
-        topLeftHandle = GLES20.glGetUniformLocation(programHandle, "topLeft")
-        topRightHandle = GLES20.glGetUniformLocation(programHandle, "topRight")
-        bottomLeftHandle = GLES20.glGetUniformLocation(programHandle, "bottomLeft")
-        bottomRightHandle = GLES20.glGetUniformLocation(programHandle, "bottomRight")
+
+        // Get corner coordinate uniform locations
+        topLeftXHandle = GLES20.glGetUniformLocation(programHandle, "topLeftX")
+        topLeftYHandle = GLES20.glGetUniformLocation(programHandle, "topLeftY")
+        topRightXHandle = GLES20.glGetUniformLocation(programHandle, "topRightX")
+        topRightYHandle = GLES20.glGetUniformLocation(programHandle, "topRightY")
+        bottomLeftXHandle = GLES20.glGetUniformLocation(programHandle, "bottomLeftX")
+        bottomLeftYHandle = GLES20.glGetUniformLocation(programHandle, "bottomLeftY")
+        bottomRightXHandle = GLES20.glGetUniformLocation(programHandle, "bottomRightX")
+        bottomRightYHandle = GLES20.glGetUniformLocation(programHandle, "bottomRightY")
 
         // Create vertex buffers
         setupVertexBuffers()
@@ -239,11 +262,25 @@ class VideoGLRenderer : GLSurfaceView.Renderer {
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTexture)
         GLES20.glUniform1i(videoTextureHandle, 0)
 
-        // Set warp parameters
-        GLES20.glUniform1f(topLeftHandle, warpShape.topLeft * warpScale)
-        GLES20.glUniform1f(topRightHandle, warpShape.topRight * warpScale)
-        GLES20.glUniform1f(bottomLeftHandle, warpShape.bottomLeft * warpScale)
-        GLES20.glUniform1f(bottomRightHandle, warpShape.bottomRight * warpScale)
+        // Set warp parameters - convert offsets to absolute corner positions
+        // Corners start at -1, 1 (TL) to 1, -1 (BR)
+        val scaledTLX = warpShape.topLeftX * warpScale
+        val scaledTLY = warpShape.topLeftY * warpScale
+        val scaledTRX = warpShape.topRightX * warpScale
+        val scaledTRY = warpShape.topRightY * warpScale
+        val scaledBLX = warpShape.bottomLeftX * warpScale
+        val scaledBLY = warpShape.bottomLeftY * warpScale
+        val scaledBRX = warpShape.bottomRightX * warpScale
+        val scaledBRY = warpShape.bottomRightY * warpScale
+
+        GLES20.glUniform1f(topLeftXHandle, -1f + scaledTLX)
+        GLES20.glUniform1f(topLeftYHandle, 1f + scaledTLY)
+        GLES20.glUniform1f(topRightXHandle, 1f + scaledTRX)
+        GLES20.glUniform1f(topRightYHandle, 1f + scaledTRY)
+        GLES20.glUniform1f(bottomLeftXHandle, -1f + scaledBLX)
+        GLES20.glUniform1f(bottomLeftYHandle, -1f + scaledBLY)
+        GLES20.glUniform1f(bottomRightXHandle, 1f + scaledBRX)
+        GLES20.glUniform1f(bottomRightYHandle, -1f + scaledBRY)
 
         // Draw
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
@@ -309,13 +346,25 @@ class VideoGLRenderer : GLSurfaceView.Renderer {
     }
 
     private fun drawCornerMarkers(selected: Corner) {
-        // Corner positions in NDC matching the quad
+        // Corner positions using actual warped coordinates
         val size = 0.03f
+        val selectedSize = 0.08f  // Larger circle for selected corner
+
+        // Get actual corner positions with warp applied
+        val scaledTLX = warpShape.topLeftX * warpScale
+        val scaledTLY = warpShape.topLeftY * warpScale
+        val scaledTRX = warpShape.topRightX * warpScale
+        val scaledTRY = warpShape.topRightY * warpScale
+        val scaledBLX = warpShape.bottomLeftX * warpScale
+        val scaledBLY = warpShape.bottomLeftY * warpScale
+        val scaledBRX = warpShape.bottomRightX * warpScale
+        val scaledBRY = warpShape.bottomRightY * warpScale
+
         val corners = arrayOf(
-            floatArrayOf(-1f, 1f),   // TL
-            floatArrayOf(1f, 1f),    // TR
-            floatArrayOf(-1f, -1f),  // BL
-            floatArrayOf(1f, -1f)    // BR
+            floatArrayOf(-1f + scaledTLX, 1f + scaledTLY),   // TL
+            floatArrayOf(1f + scaledTRX, 1f + scaledTRY),    // TR
+            floatArrayOf(-1f + scaledBLX, -1f + scaledBLY),  // BL
+            floatArrayOf(1f + scaledBRX, -1f + scaledBRY)    // BR
         )
         val order = arrayOf(Corner.TOP_LEFT, Corner.TOP_RIGHT, Corner.BOTTOM_LEFT, Corner.BOTTOM_RIGHT)
 
@@ -326,34 +375,82 @@ class VideoGLRenderer : GLSurfaceView.Renderer {
         for (i in corners.indices) {
             val isSelected = order[i] == selected
             val (cx, cy) = corners[i]
-            // Make a small cross marker
+
+            if (isSelected) {
+                // Draw large bright circle around selected corner
+                drawCircle(cx, cy, selectedSize, 0f, 1f, 1f, 1f)  // Bright cyan
+            }
+
+            // Draw small cross marker
+            val markerSize = if (isSelected) size * 1.5f else size
             val verts = floatArrayOf(
-                cx - size, cy, 0f,  cx + size, cy, 0f,
-                cx, cy - size, 0f,  cx, cy + size, 0f
+                cx - markerSize, cy, 0f,  cx + markerSize, cy, 0f,
+                cx, cy - markerSize, 0f,  cx, cy + markerSize, 0f
             )
             val buf = ByteBuffer.allocateDirect(verts.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
             buf.put(verts).position(0)
 
             GLES20.glEnableVertexAttribArray(markerPosHandle)
             GLES20.glVertexAttribPointer(markerPosHandle, 3, GLES20.GL_FLOAT, false, 12, buf)
-            // Yellow for normal, Cyan for selected
-            GLES20.glUniform4f(markerColorHandle, if (isSelected) 0f else 1f, 1f, if (isSelected) 1f else 0f, 1f)
+
+            if (isSelected) {
+                // Bright cyan for selected, larger line width
+                GLES20.glUniform4f(markerColorHandle, 0f, 1f, 1f, 1f)
+                GLES20.glLineWidth(4f)
+            } else {
+                // Yellow for normal
+                GLES20.glUniform4f(markerColorHandle, 1f, 1f, 0f, 1f)
+                GLES20.glLineWidth(2f)
+            }
+
             GLES20.glDrawArrays(GLES20.GL_LINES, 0, 4)
             GLES20.glDisableVertexAttribArray(markerPosHandle)
         }
     }
 
+    private fun drawCircle(cx: Float, cy: Float, radius: Float, r: Float, g: Float, b: Float, a: Float) {
+        val segments = 16
+        val verts = mutableListOf<Float>()
+
+        for (i in 0..segments) {
+            val angle = 2f * 3.14159265f * i / segments
+            val x = cx + radius * kotlin.math.cos(angle.toDouble()).toFloat()
+            val y = cy + radius * kotlin.math.sin(angle.toDouble()).toFloat()
+            verts.add(x)
+            verts.add(y)
+            verts.add(0f)
+        }
+
+        val buf = ByteBuffer.allocateDirect(verts.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+        buf.put(verts.toFloatArray()).position(0)
+
+        GLES20.glUniform4f(markerColorHandle, r, g, b, a)
+        GLES20.glLineWidth(2.5f)
+        GLES20.glEnableVertexAttribArray(markerPosHandle)
+        GLES20.glVertexAttribPointer(markerPosHandle, 3, GLES20.GL_FLOAT, false, 12, buf)
+        GLES20.glDrawArrays(GLES20.GL_LINE_STRIP, 0, segments + 1)
+        GLES20.glDisableVertexAttribArray(markerPosHandle)
+    }
+
     private fun drawWarpBorder() {
-        // Compute warped corner positions matching the vertex shader logic
-        // Top edge uses bottom offsets per current mix() formula, bottom uses top offsets
-        val xTL = -1f + (warpShape.bottomLeft * warpScale)
-        val yTL = 1f
-        val xTR = 1f + (warpShape.bottomRight * warpScale)
-        val yTR = 1f
-        val xBR = 1f + (warpShape.topRight * warpScale)
-        val yBR = -1f
-        val xBL = -1f + (warpShape.topLeft * warpScale)
-        val yBL = -1f
+        // Draw border using actual corner positions with warp applied
+        val scaledTLX = warpShape.topLeftX * warpScale
+        val scaledTLY = warpShape.topLeftY * warpScale
+        val scaledTRX = warpShape.topRightX * warpScale
+        val scaledTRY = warpShape.topRightY * warpScale
+        val scaledBLX = warpShape.bottomLeftX * warpScale
+        val scaledBLY = warpShape.bottomLeftY * warpScale
+        val scaledBRX = warpShape.bottomRightX * warpScale
+        val scaledBRY = warpShape.bottomRightY * warpScale
+
+        val xTL = -1f + scaledTLX
+        val yTL = 1f + scaledTLY
+        val xTR = 1f + scaledTRX
+        val yTR = 1f + scaledTRY
+        val xBR = 1f + scaledBRX
+        val yBR = -1f + scaledBRY
+        val xBL = -1f + scaledBLX
+        val yBL = -1f + scaledBLY
 
         val verts = floatArrayOf(
             xTL, yTL, 0f,
