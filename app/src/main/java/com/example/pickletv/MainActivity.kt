@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
 
         isDebugBuild = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-        Log.d("MainActivity", "onCreate called")
+        // Handle mode from WelcomeActivity
+        val mode = intent.getStringExtra("MODE")
+        val email = intent.getStringExtra("EMAIL")
+
+        Log.d("MainActivity", "onCreate called - Mode: $mode, Email: $email")
 
         warpShapeManager = WarpShapeManager(this)
         currentWarpShape = warpShapeManager.loadWarpShape()
