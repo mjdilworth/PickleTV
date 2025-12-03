@@ -1,4 +1,4 @@
-package com.example.pickletv
+package com.pickletv.app
 
 import android.content.Context
 import android.content.SharedPreferences

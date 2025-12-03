@@ -1,4 +1,4 @@
-package com.example.pickletv
+package com.pickletv.app
 
 enum class Corner {
     TOP_LEFT,

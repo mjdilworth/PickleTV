@@ -1,4 +1,4 @@
-package com.example.pickletv
+package com.pickletv.app
 
 import android.content.pm.ApplicationInfo
 import android.net.Uri
@@ -93,17 +93,71 @@ class MainActivity : ComponentActivity() {
         // Post to main thread to avoid "Player is accessed on the wrong thread" error
         mainHandler.post {
             try {
-                // Find the video file
-                val videoFile = findVideoFile()
-                if (videoFile != null && videoFile.exists()) {
-                    loadVideo(surface, videoFile.absolutePath)
+                // Check if a video URL was provided via intent
+                val videoUrl = intent.getStringExtra("VIDEO_URL")
+
+                if (!videoUrl.isNullOrEmpty()) {
+                    // Handle video URL from HomeActivity
+                    if (videoUrl.startsWith("local://")) {
+                        // Local file reference
+                        val fileName = videoUrl.removePrefix("local://")
+                        val videoFile = findVideoFileByName(fileName)
+                        if (videoFile != null && videoFile.exists()) {
+                            loadVideo(surface, videoFile.absolutePath)
+                        } else {
+                            Log.e("MainActivity", "Local video file not found: $fileName")
+                        }
+                    } else if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                        // Streaming URL
+                        loadVideoFromUrl(surface, videoUrl)
+                    } else {
+                        // Assume it's a file path
+                        loadVideo(surface, videoUrl)
+                    }
                 } else {
-                    Log.e("MainActivity", "Video file not found: h-6.mp4")
+                    // Fallback to default video file
+                    val videoFile = findVideoFile()
+                    if (videoFile != null && videoFile.exists()) {
+                        loadVideo(surface, videoFile.absolutePath)
+                    } else {
+                        Log.e("MainActivity", "Video file not found: h-6.mp4")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("MainActivity", "Error setting up ExoPlayer: ${e.message}", e)
             }
         }
+    }
+
+    private fun findVideoFileByName(fileName: String): File? {
+        val possiblePaths = mutableListOf<File>()
+
+        // 1. App-specific external cache directory (where the script pushes to)
+        externalCacheDir?.let { possiblePaths.add(File(it, fileName)) }
+
+        // 2. App cache directory
+        possiblePaths.add(File(cacheDir, fileName))
+
+        // 3. App files directory
+        possiblePaths.add(File(filesDir, fileName))
+
+        // 4. App-specific external files directory
+        getExternalFilesDir(null)?.let { possiblePaths.add(File(it, fileName)) }
+
+        // 5. App files parent directory (for dev builds)
+        filesDir.parentFile?.let { possiblePaths.add(File(it, fileName)) }
+
+        Log.d("MainActivity", "Searching for video '$fileName' in ${possiblePaths.size} locations:")
+        for (path in possiblePaths) {
+            Log.d("MainActivity", "  - Checking: ${path.absolutePath}")
+            if (path.exists() && path.isFile) {
+                Log.d("MainActivity", "✓ Found video at: ${path.absolutePath}")
+                return path
+            }
+        }
+
+        Log.w("MainActivity", "Video file ${fileName} not found in any location")
+        return null
     }
 
     private fun findVideoFile(): File? {
@@ -158,6 +212,23 @@ class MainActivity : ComponentActivity() {
             Log.d("MainActivity", "Video loaded and playing: $filePath")
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading video: ${e.message}", e)
+        }
+    }
+
+    private fun loadVideoFromUrl(surface: Surface, url: String) {
+        try {
+            Log.d("MainActivity", "Loading video from URL: $url")
+            val videoUri = Uri.parse(url)
+            val mediaItem = MediaItem.fromUri(videoUri)
+
+            // All ExoPlayer calls on main thread
+            exoPlayer.setVideoSurface(surface)
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.play()
+            Log.d("MainActivity", "Video streaming from: $url")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error streaming video: ${e.message}", e)
         }
     }
 
@@ -238,19 +309,55 @@ class MainActivity : ComponentActivity() {
                 true
             }
 
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> {
                 // Save warp shape on confirm
                 warpShapeManager.saveWarpShape(currentWarpShape)
                 Log.d("MainActivity", "Warp shape saved: $currentWarpShape")
                 true
             }
 
-            KeyEvent.KEYCODE_DEL -> {
+            // TV Remote: Menu button toggles corner edit mode
+            KeyEvent.KEYCODE_MENU -> {
+                cornerEditMode = !cornerEditMode
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "Remote: Corner edit mode: $cornerEditMode")
+                true
+            }
+
+            // TV Remote: Channel Up/Down to cycle through corners
+            KeyEvent.KEYCODE_CHANNEL_UP -> {
+                selectedCorner = selectedCorner.next()
+                if (!cornerEditMode) cornerEditMode = true
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "Remote: Next corner: $selectedCorner")
+                true
+            }
+
+            KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                selectedCorner = prevCorner(selectedCorner)
+                if (!cornerEditMode) cornerEditMode = true
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "Remote: Previous corner: $selectedCorner")
+                true
+            }
+
+            // TV Remote: Long press on OK/Select to reset warp
+            KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_BUTTON_B -> {
                 // Reset warp shape
                 currentWarpShape = WarpShape()
                 renderer.setWarpShape(currentWarpShape)
                 glSurfaceView.requestRender()
                 Log.d("MainActivity", "Warp shape reset")
+                true
+            }
+
+            // TV Remote: Info/Guide button for fine adjustment toggle
+            KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_GUIDE -> {
+                // Toggle between fine and coarse adjustment
+                val temp = warpAdjustmentStep
+                warpAdjustmentStep = largeAdjustmentStep
+                largeAdjustmentStep = temp
+                Log.d("MainActivity", "Remote: Step size toggled to $warpAdjustmentStep")
                 true
             }
 

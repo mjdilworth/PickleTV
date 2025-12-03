@@ -1,0 +1,32 @@
+{
+  "videos": [
+    {
+      "id": "montblanc-1",
+      "title": "Mont Blanc Scene 1",
+      "description": "Beautiful scenic footage from Mont Blanc",
+      "thumbnailUrl": "https://tv.dilly.cloud/content/montblanc1.jpg",
+      "videoUrl": "https://tv.dilly.cloud/content/montblanc1.mp4",
+      "duration": "2:30",
+      "category": "Nature"
+    },
+    {
+      "id": "montblanc-2",
+      "title": "Mont Blanc Scene 2",
+      "description": "Stunning mountain views",
+      "thumbnailUrl": "https://tv.dilly.cloud/content/montblanc2.jpg",
+      "videoUrl": "https://tv.dilly.cloud/content/montblanc2.mp4",
+      "duration": "1:45",
+      "category": "Nature"
+    },
+    {
+      "id": "demo-1",
+      "title": "Demo Video",
+      "description": "Sample keystone-corrected video playback",
+      "thumbnailUrl": "https://tv.dilly.cloud/content/demo-thumb.jpg",
+      "videoUrl": "https://tv.dilly.cloud/content/h-6.mp4",
+      "duration": "0:30",
+      "category": "Demo"
+    }
+  ]
+}
+

@@ -1,6 +1,7 @@
-package com.example.pickletv
+package com.pickletv.app
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.util.Patterns
@@ -152,10 +153,22 @@ class WelcomeActivity : ComponentActivity() {
             setOnClickListener { showWelcomeScreen() }
         }
 
+        val privacyPolicyLink = TextView(this).apply {
+            text = "Privacy Policy"
+            textSize = 16f
+            setTextColor(0xFF00BFFF.toInt()) // Sky blue color for link
+            gravity = Gravity.CENTER
+            setPadding(0, dpToPx(16), 0, 0)
+            setOnClickListener { openPrivacyPolicy() }
+            // Make it look like a link
+            paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+        }
+
         signInLayout.addView(signInTitle)
         signInLayout.addView(emailInput)
         signInLayout.addView(submitButton)
         signInLayout.addView(backButton)
+        signInLayout.addView(privacyPolicyLink)
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -201,6 +214,18 @@ class WelcomeActivity : ComponentActivity() {
 
         // Proceed to main activity after sign-in
         launchMainActivity(email)
+    }
+
+    private fun openPrivacyPolicy() {
+        val privacyUrl = getString(R.string.privacy_policy_url)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyUrl))
+        try {
+            startActivity(intent)
+            Log.d("WelcomeActivity", "Opening privacy policy: $privacyUrl")
+        } catch (e: Exception) {
+            Toast.makeText(this, "Unable to open privacy policy", Toast.LENGTH_SHORT).show()
+            Log.e("WelcomeActivity", "Error opening privacy policy", e)
+        }
     }
 
     private fun launchDemoVideo() {

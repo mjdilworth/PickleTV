@@ -1,4 +1,4 @@
-package com.example.pickletv.ui.theme
+package com.pickletv.app.ui.theme
 
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily

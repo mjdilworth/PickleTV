@@ -1,4 +1,4 @@
-package com.example.pickletv.ui.theme
+package com.pickletv.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable

@@ -7,6 +7,12 @@ app/build/
 local.properties
 *.iml
 
+# Signing configuration (SENSITIVE - never commit)
+keystore.properties
+*.keystore
+*.jks
+*.p12
+
 # Android Studio project files (keep a minimal set tracked)
 /.idea/*
 !/.idea/codeStyles/
