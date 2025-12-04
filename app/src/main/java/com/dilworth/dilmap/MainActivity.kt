@@ -10,7 +10,10 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.InputDevice
 import android.view.Surface
+import android.view.Gravity
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.google.android.exoplayer2.ExoPlayer
@@ -28,14 +31,24 @@ class MainActivity : ComponentActivity() {
 
     private var currentWarpShape = WarpShape()
 
+    // Keystone menu system
+    private var keystoneMenuVisible: Boolean = false
+    private var selectedMenuIndex: Int = 0
     private var cornerEditMode: Boolean = false
     private var selectedCorner: Corner = Corner.TOP_LEFT
-    private var overlayGridVisible: Boolean = false
-    private var showStepSizeIndicator: Boolean = false
+    private lateinit var keystoneMenuOverlay: LinearLayout
+    private val menuTextViews = mutableListOf<TextView>()
+    private val menuOptions = listOf(
+        "Corner 1 (Top Left)",
+        "Corner 2 (Top Right)",
+        "Corner 3 (Bottom Right)",
+        "Corner 4 (Bottom Left)",
+        "Save Keystone",
+        "Exit Keystone"
+    )
 
-    // Adjustment step sizes for different modes
+    // Adjustment settings
     private var warpAdjustmentStep = 0.05f
-    private var largeAdjustmentStep = 0.20f  // For fast adjustments
 
     private var inputLoggingEnabled: Boolean = true
     private var isDebugBuild: Boolean = false
@@ -71,10 +84,122 @@ class MainActivity : ComponentActivity() {
         renderer.setCornerHighlightProvider { cornerEditMode to selectedCorner }
 
         container.addView(glSurfaceView)
+
+        // Create keystone menu overlay (initially hidden)
+        createKeystoneMenuOverlay(container)
+
         setContentView(container)
 
         // Initialize ExoPlayer
         initializeExoPlayer()
+    }
+
+    private fun createKeystoneMenuOverlay(container: FrameLayout) {
+        // Create semi-transparent background overlay
+        keystoneMenuOverlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xCC000000.toInt()) // Semi-transparent black
+            setPadding(60, 60, 60, 60)
+            visibility = android.view.View.GONE
+
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+        }
+
+        // Add title
+        TextView(this).apply {
+            text = "KEYSTONE ADJUSTMENT"
+            textSize = 28f
+            setTextColor(0xFFFFFFFF.toInt())
+            setPadding(0, 0, 0, 40)
+            gravity = Gravity.CENTER
+            keystoneMenuOverlay.addView(this)
+        }
+
+        // Add menu options
+        menuOptions.forEachIndexed { index, option ->
+            val textView = TextView(this).apply {
+                text = option
+                textSize = 22f
+                setTextColor(0xFFCCCCCC.toInt())
+                setPadding(40, 20, 40, 20)
+                gravity = Gravity.CENTER
+
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 10, 0, 10)
+                }
+            }
+            menuTextViews.add(textView)
+            keystoneMenuOverlay.addView(textView)
+        }
+
+        container.addView(keystoneMenuOverlay)
+        updateMenuHighlight()
+    }
+
+    private fun updateMenuHighlight() {
+        menuTextViews.forEachIndexed { index, textView ->
+            if (index == selectedMenuIndex) {
+                textView.setBackgroundColor(0xFF4A90E2.toInt()) // Blue highlight
+                textView.setTextColor(0xFFFFFFFF.toInt()) // White text
+                textView.textSize = 24f
+            } else {
+                textView.setBackgroundColor(0x00000000.toInt()) // Transparent
+                textView.setTextColor(0xFFCCCCCC.toInt()) // Gray text
+                textView.textSize = 22f
+            }
+        }
+    }
+
+    private fun showKeystoneMenu() {
+        keystoneMenuVisible = true
+        keystoneMenuOverlay.visibility = android.view.View.VISIBLE
+        selectedMenuIndex = 0
+        updateMenuHighlight()
+        Log.d("MainActivity", "Keystone menu opened")
+    }
+
+    private fun hideKeystoneMenu() {
+        keystoneMenuVisible = false
+        keystoneMenuOverlay.visibility = android.view.View.GONE
+        cornerEditMode = false
+        glSurfaceView.requestRender()
+        Log.d("MainActivity", "Keystone menu closed")
+    }
+
+    private fun handleMenuSelection() {
+        when (selectedMenuIndex) {
+            0, 1, 2, 3 -> { // Corner selection
+                selectedCorner = Corner.values()[selectedMenuIndex]
+                cornerEditMode = true
+                keystoneMenuVisible = false
+                keystoneMenuOverlay.visibility = android.view.View.GONE
+                glSurfaceView.requestRender()
+                Toast.makeText(
+                    this,
+                    "Adjusting ${menuOptions[selectedMenuIndex]}\nUse D-Pad arrows to move\nPress Center to return to menu",
+                    Toast.LENGTH_LONG
+                ).show()
+                Log.d("MainActivity", "Selected corner: $selectedCorner")
+            }
+            4 -> { // Save Keystone
+                warpShapeManager.saveWarpShape(currentWarpShape)
+                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
+                hideKeystoneMenu()
+                Log.d("MainActivity", "Keystone saved")
+            }
+            5 -> { // Exit Keystone
+                hideKeystoneMenu()
+                Toast.makeText(this, "Keystone adjustment closed", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun initializeExoPlayer() {
@@ -100,119 +225,48 @@ class MainActivity : ComponentActivity() {
                 if (!videoUrl.isNullOrEmpty()) {
                     // Handle video URL from HomeActivity
                     if (videoUrl.startsWith("local://")) {
-                        // Local file reference
-                        val fileName = videoUrl.removePrefix("local://")
-                        val videoFile = findVideoFileByName(fileName)
-                        if (videoFile != null && videoFile.exists()) {
-                            loadVideo(surface, videoFile.absolutePath)
-                        } else {
-                            Log.e("MainActivity", "Local video file not found: $fileName")
-                        }
+                        // Local file - extract path
+                        val localPath = videoUrl.removePrefix("local://")
+                        loadLocalVideo(surface, localPath)
                     } else if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
-                        // Streaming URL
+                        // Network URL - stream directly
                         loadVideoFromUrl(surface, videoUrl)
+                    } else if (videoUrl.startsWith("/")) {
+                        // Absolute file path (from cache)
+                        loadLocalVideo(surface, videoUrl)
                     } else {
-                        // Assume it's a file path
-                        loadVideo(surface, videoUrl)
+                        Log.e("MainActivity", "Unknown video URL format: $videoUrl")
                     }
                 } else {
-                    // Fallback to default video file
-                    val videoFile = findVideoFile()
-                    if (videoFile != null && videoFile.exists()) {
-                        loadVideo(surface, videoFile.absolutePath)
-                    } else {
-                        Log.e("MainActivity", "Video file not found: h-6.mp4")
-                    }
+                    // Fallback to default video
+                    loadLocalVideo(surface, BuildConfig.DEBUG_VIDEO_FILE_NAME)
                 }
             } catch (e: Exception) {
-                Log.e("MainActivity", "Error setting up ExoPlayer: ${e.message}", e)
+                Log.e("MainActivity", "Error setting up video: ${e.message}", e)
             }
         }
     }
 
-    private fun findVideoFileByName(fileName: String): File? {
-        val possiblePaths = mutableListOf<File>()
-
-        // 1. App-specific external cache directory (where the script pushes to)
-        externalCacheDir?.let { possiblePaths.add(File(it, fileName)) }
-
-        // 2. App cache directory
-        possiblePaths.add(File(cacheDir, fileName))
-
-        // 3. App files directory
-        possiblePaths.add(File(filesDir, fileName))
-
-        // 4. App-specific external files directory
-        getExternalFilesDir(null)?.let { possiblePaths.add(File(it, fileName)) }
-
-        // 5. App files parent directory (for dev builds)
-        filesDir.parentFile?.let { possiblePaths.add(File(it, fileName)) }
-
-        Log.d("MainActivity", "Searching for video '$fileName' in ${possiblePaths.size} locations:")
-        for (path in possiblePaths) {
-            Log.d("MainActivity", "  - Checking: ${path.absolutePath}")
-            if (path.exists() && path.isFile) {
-                Log.d("MainActivity", "✓ Found video at: ${path.absolutePath}")
-                return path
-            }
-        }
-
-        Log.w("MainActivity", "Video file ${fileName} not found in any location")
-        return null
-    }
-
-    private fun findVideoFile(): File? {
-        val fileName = BuildConfig.DEBUG_VIDEO_FILE_NAME
-        val possiblePaths = mutableListOf<File>()
-
-        // 1. App-specific external cache directory (where the script pushes to)
-        externalCacheDir?.let { possiblePaths.add(File(it, fileName)) }
-
-        // 2. App cache directory
-        possiblePaths.add(File(cacheDir, fileName))
-
-        // 3. App files directory
-        possiblePaths.add(File(filesDir, fileName))
-
-        // 4. App-specific external files directory
-        getExternalFilesDir(null)?.let { possiblePaths.add(File(it, fileName)) }
-
-        // 5. App files parent directory (for dev builds)
-        filesDir.parentFile?.let { possiblePaths.add(File(it, fileName)) }
-
-        Log.d("MainActivity", "Searching for video in ${possiblePaths.size} locations:")
-        for (path in possiblePaths) {
-            Log.d("MainActivity", "  - Checking: ${path.absolutePath}")
-            if (path.exists() && path.isFile) {
-                Log.d("MainActivity", "✓ Found video at: ${path.absolutePath}")
-                return path
-            }
-        }
-
-        Log.w("MainActivity", "Video file ${fileName} not found in any location")
-        Log.w("MainActivity", "Please run: ./tools/push_video.sh")
-        return null
-    }
-
-    private fun loadVideo(surface: Surface, filePath: String) {
+    private fun loadLocalVideo(surface: Surface, fileName: String) {
         try {
-            val file = File(filePath)
-            if (!file.exists()) {
-                Log.e("MainActivity", "Video file does not exist: $filePath")
-                return
+            // Check if file exists at the path
+            val videoFile = File(fileName)
+
+            if (videoFile.exists()) {
+                Log.d("MainActivity", "Loading video from absolute path: ${videoFile.absolutePath}")
+                val videoUri = Uri.fromFile(videoFile)
+                val mediaItem = MediaItem.fromUri(videoUri)
+
+                exoPlayer.setVideoSurface(surface)
+                exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.prepare()
+                exoPlayer.play()
+                Log.d("MainActivity", "Video loaded successfully from: ${videoFile.absolutePath}")
+            } else {
+                Log.e("MainActivity", "Video file does not exist: ${videoFile.absolutePath}")
             }
-
-            val videoUri = Uri.fromFile(file)
-            val mediaItem = MediaItem.fromUri(videoUri)
-
-            // All ExoPlayer calls on main thread
-            exoPlayer.setVideoSurface(surface)
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            exoPlayer.play()
-            Log.d("MainActivity", "Video loaded and playing: $filePath")
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error loading video: ${e.message}", e)
+            Log.e("MainActivity", "Error loading local video: ${e.message}", e)
         }
     }
 
@@ -254,454 +308,96 @@ class MainActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         event?.let { logKeyEvent(keyCode, it) }
 
-        // Development-only keyboard aliases and enhanced mappings (CHECK FIRST!)
-        if (isDebugBuild && event != null) {
-            val devResult = handleDevKeyboardMappings(keyCode, event)
-            if (devResult) {
-                return true  // Dev handler handled it
+        // Handle keystone menu navigation FIRST
+        if (keystoneMenuVisible) {
+            return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    selectedMenuIndex = (selectedMenuIndex - 1 + menuOptions.size) % menuOptions.size
+                    updateMenuHighlight()
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    selectedMenuIndex = (selectedMenuIndex + 1) % menuOptions.size
+                    updateMenuHighlight()
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    handleMenuSelection()
+                    true
+                }
+                KeyEvent.KEYCODE_BACK -> {
+                    hideKeystoneMenu()
+                    true
+                }
+                else -> true // Consume all keys when menu is visible
             }
         }
 
-        return when (keyCode) {
-            // ====== LEGACY REMOTE/BUTTON MAPPINGS (Production) ======
+        // Handle corner adjustment mode (when adjusting a specific corner)
+        if (cornerEditMode) {
+            return when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    adjustCorner(selectedCorner, dy = warpAdjustmentStep)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    adjustCorner(selectedCorner, dy = -warpAdjustmentStep)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    adjustCorner(selectedCorner, dx = warpAdjustmentStep)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    // Return to menu
+                    showKeystoneMenu()
+                    true
+                }
+                KeyEvent.KEYCODE_BACK -> {
+                    // Exit corner adjustment
+                    hideKeystoneMenu()
+                    true
+                }
+                else -> super.onKeyDown(keyCode, event)
+            }
+        }
 
-            // Toggle verbose input logging
+        // Normal playback mode - D-Pad Center opens keystone menu
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                showKeystoneMenu()
+                true
+            }
+
+            // Development keyboard shortcuts
+            KeyEvent.KEYCODE_V -> {
+                // V key = open menu (for keyboard testing)
+                showKeystoneMenu()
+                true
+            }
+
             KeyEvent.KEYCODE_F1 -> {
                 inputLoggingEnabled = !inputLoggingEnabled
                 Log.d("InputLogger", "inputLoggingEnabled=$inputLoggingEnabled")
                 true
             }
 
-            // Toggle corner edit mode (show/hide corner highlights)
-            KeyEvent.KEYCODE_C -> {
-                cornerEditMode = !cornerEditMode
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Corner edit mode: $cornerEditMode, selected=$selectedCorner")
-                true
-            }
-
-            // Cycle selected corner (Tab key)
-            KeyEvent.KEYCODE_TAB -> {
-                if (event?.isShiftPressed == true) {
-                    selectedCorner = prevCorner(selectedCorner)
-                } else {
-                    selectedCorner = selectedCorner.next()
-                }
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Selected corner: $selectedCorner")
-                true
-            }
-
-            // DPAD adjusts keystone ONLY when corner edit mode is enabled
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dy = -warpAdjustmentStep)
-                    true
-                } else {
-                    false // Allow default navigation behavior when edit mode is off
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dy = warpAdjustmentStep)
-                    true
-                } else {
-                    false // Allow default navigation behavior when edit mode is off
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
-                    true
-                } else {
-                    false // Allow default navigation behavior when edit mode is off
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dx = warpAdjustmentStep)
-                    true
-                } else {
-                    false // Allow default navigation behavior when edit mode is off
-                }
-            }
-
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> {
-                // Save warp shape on confirm
-                warpShapeManager.saveWarpShape(currentWarpShape)
-                Log.d("MainActivity", "Warp shape saved: $currentWarpShape")
-                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
-                true
-            }
-
-            // ====== GOOGLE TV STREAMER REMOTE CONTROLS ======
-
-            // Volume Up toggles corner edit mode (replaces Menu button)
-            KeyEvent.KEYCODE_VOLUME_UP -> {
-                cornerEditMode = !cornerEditMode
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Google TV Remote: Corner edit mode: $cornerEditMode")
-                true
-            }
-
-            // Volume Down cycles through corners (replaces Channel Up)
-            KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                selectedCorner = selectedCorner.next()
-                if (!cornerEditMode) cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Google TV Remote: Next corner: $selectedCorner")
-                true
-            }
-
-            // Mute toggles fine/coarse adjustment speed (replaces Info/Guide)
-            KeyEvent.KEYCODE_MUTE -> {
-                // Swap step sizes
-                val temp = warpAdjustmentStep
-                warpAdjustmentStep = largeAdjustmentStep
-                largeAdjustmentStep = temp
-                Log.d("MainActivity", "Google TV Remote: Adjustment step toggled to $warpAdjustmentStep")
-                true
-            }
-
-            // ====== KEYBOARD SIMULATION OF GOOGLE TV STREAMER ======
-
-            // V key simulates Volume Up (corner edit toggle)
-            KeyEvent.KEYCODE_V -> {
-                cornerEditMode = !cornerEditMode
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Keyboard (V): Corner edit mode: $cornerEditMode")
-                true
-            }
-
-            // B key simulates Volume Down (next corner)
-            KeyEvent.KEYCODE_B -> {
-                selectedCorner = selectedCorner.next()
-                if (!cornerEditMode) cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Keyboard (B): Next corner: $selectedCorner")
-                true
-            }
-
-            // M key simulates Mute (toggle adjustment speed)
-            KeyEvent.KEYCODE_M -> {
-                val temp = warpAdjustmentStep
-                warpAdjustmentStep = largeAdjustmentStep
-                largeAdjustmentStep = temp
-                Log.d("MainActivity", "Keyboard (M): Adjustment step toggled to $warpAdjustmentStep")
-                true
-            }
-
-            // ====== LEGACY DEVELOPMENT SHORTCUTS ======
-
-            // E/C keys also toggle corner edit mode (legacy)
-            KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_C -> {
-                cornerEditMode = !cornerEditMode
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "Keyboard: Corner edit mode: $cornerEditMode")
-                true
-            }
-
-            // Reset warp shape (keyboard only)
-            KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_BUTTON_B -> {
-                // Reset warp shape
+            KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_R, KeyEvent.KEYCODE_0 -> {
+                // Reset warp shape (keyboard only)
                 currentWarpShape = WarpShape()
                 renderer.setWarpShape(currentWarpShape)
                 glSurfaceView.requestRender()
+                Toast.makeText(this, "Keystone reset to default", Toast.LENGTH_SHORT).show()
                 Log.d("MainActivity", "Warp shape reset")
                 true
             }
 
             else -> super.onKeyDown(keyCode, event)
         }
-    }
-
-    private fun handleDevKeyboardMappings(keyCode: Int, event: KeyEvent): Boolean {
-        return when (keyCode) {
-            // ====== PLAY / PAUSE CONTROLS ======
-            KeyEvent.KEYCODE_P -> {
-                togglePlayPauseAndEditMode()
-                true
-            }
-            KeyEvent.KEYCODE_SPACE -> {
-                togglePlayPauseAndEditMode()
-                true
-            }
-
-            // ====== DIRECTIONAL CONTROLS (Arrow Keys) ======
-            // Arrow keys adjust keystone ONLY when corner edit mode is enabled
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                Log.d("MainActivity", "[KEY] DPAD_UP pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dy = warpAdjustmentStep)  // UP = positive Y
-                    true
-                } else {
-                    false // Let default handler manage navigation
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                Log.d("MainActivity", "[KEY] DPAD_DOWN pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dy = -warpAdjustmentStep)  // DOWN = negative Y
-                    true
-                } else {
-                    false // Let default handler manage navigation
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                Log.d("MainActivity", "[KEY] DPAD_LEFT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
-                    true
-                } else {
-                    false // Let default handler manage navigation
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                Log.d("MainActivity", "[KEY] DPAD_RIGHT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
-                if (cornerEditMode) {
-                    adjustCorner(selectedCorner, dx = warpAdjustmentStep)
-                    true
-                } else {
-                    false // Let default handler manage navigation
-                }
-            }
-
-            // ====== CORNER SELECTION & CYCLING ======
-            KeyEvent.KEYCODE_TAB -> {
-                if (event?.isShiftPressed == true) {
-                    selectedCorner = prevCorner(selectedCorner)
-                } else {
-                    selectedCorner = selectedCorner.next()
-                }
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                true
-            }
-
-            // N advances selected corner
-            KeyEvent.KEYCODE_N -> {
-                selectedCorner = selectedCorner.next()
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Selected corner: $selectedCorner")
-                true
-            }
-
-            // Direct corner selection with number keys 1,2,3,4
-            // 1 = TOP_LEFT, 2 = TOP_RIGHT, 3 = BOTTOM_RIGHT, 4 = BOTTOM_LEFT
-            KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
-                selectedCorner = Corner.TOP_LEFT
-                cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Snap: TOP_LEFT (1) selected")
-                true
-            }
-            KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
-                selectedCorner = Corner.TOP_RIGHT
-                cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Snap: TOP_RIGHT (2) selected")
-                true
-            }
-            KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_NUMPAD_3 -> {
-                selectedCorner = Corner.BOTTOM_RIGHT
-                cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Snap: BOTTOM_RIGHT (3) selected")
-                true
-            }
-            KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_NUMPAD_4 -> {
-                selectedCorner = Corner.BOTTOM_LEFT
-                cornerEditMode = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Snap: BOTTOM_LEFT (4) selected")
-                true
-            }
-
-            // 0 = Center helper (reset all)
-            KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_NUMPAD_0 -> {
-                currentWarpShape = WarpShape()
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Snap: Reset to center")
-                true
-            }
-
-            // ====== STEP SIZE CONTROLS (] and [ keys) ======
-            // Right bracket ] increases step size
-            KeyEvent.KEYCODE_RIGHT_BRACKET -> {
-                warpAdjustmentStep = (warpAdjustmentStep + 0.05f).coerceAtMost(0.50f)
-                largeAdjustmentStep = warpAdjustmentStep * 4
-                showStepSizeIndicator = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Step size increased: $warpAdjustmentStep")
-                true
-            }
-
-            // Left bracket [ decreases step size
-            KeyEvent.KEYCODE_LEFT_BRACKET -> {
-                warpAdjustmentStep = (warpAdjustmentStep - 0.05f).coerceAtLeast(0.01f)
-                largeAdjustmentStep = warpAdjustmentStep * 4
-                showStepSizeIndicator = true
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Step size decreased: $warpAdjustmentStep")
-                true
-            }
-
-            // ====== WHOLE SHAPE MOVEMENT (Page Up/Down) ======
-            // Page Up = Move shape up (vertical adjustment for all corners)
-            KeyEvent.KEYCODE_PAGE_UP -> {
-                currentWarpShape = currentWarpShape.copy(
-                    topLeftY = currentWarpShape.topLeftY + largeAdjustmentStep,
-                    topRightY = currentWarpShape.topRightY + largeAdjustmentStep,
-                    bottomLeftY = currentWarpShape.bottomLeftY + largeAdjustmentStep,
-                    bottomRightY = currentWarpShape.bottomRightY + largeAdjustmentStep
-                )
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Moved shape up: $currentWarpShape")
-                true
-            }
-
-            // Page Down = Move shape down
-            KeyEvent.KEYCODE_PAGE_DOWN -> {
-                currentWarpShape = currentWarpShape.copy(
-                    topLeftY = currentWarpShape.topLeftY - largeAdjustmentStep,
-                    topRightY = currentWarpShape.topRightY - largeAdjustmentStep,
-                    bottomLeftY = currentWarpShape.bottomLeftY - largeAdjustmentStep,
-                    bottomRightY = currentWarpShape.bottomRightY - largeAdjustmentStep
-                )
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Moved shape down: $currentWarpShape")
-                true
-            }
-
-            // ====== OVERLAY GRID / HUD TOGGLE (M key) ======
-            KeyEvent.KEYCODE_M -> {
-                overlayGridVisible = !overlayGridVisible
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Overlay grid: $overlayGridVisible")
-                true
-            }
-
-            // ====== EXIT EDIT MODE (Escape key) ======
-            KeyEvent.KEYCODE_ESCAPE -> {
-                cornerEditMode = false
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Exited edit mode")
-                true
-            }
-
-            // ====== VOLUME +/- FOR HORIZONTAL FRAME MOVEMENT ======
-            // Volume Up = Move entire frame right
-            KeyEvent.KEYCODE_VOLUME_UP -> {
-                currentWarpShape = currentWarpShape.copy(
-                    topLeftX = currentWarpShape.topLeftX + warpAdjustmentStep,
-                    topRightX = currentWarpShape.topRightX + warpAdjustmentStep,
-                    bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep,
-                    bottomRightX = currentWarpShape.bottomRightX + warpAdjustmentStep
-                )
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Moved frame right: $currentWarpShape")
-                true
-            }
-
-            // Volume Down = Move entire frame left
-            KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                currentWarpShape = currentWarpShape.copy(
-                    topLeftX = currentWarpShape.topLeftX - warpAdjustmentStep,
-                    topRightX = currentWarpShape.topRightX - warpAdjustmentStep,
-                    bottomLeftX = currentWarpShape.bottomLeftX - warpAdjustmentStep,
-                    bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
-                )
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Moved frame left: $currentWarpShape")
-                true
-            }
-
-            // ====== EDIT MODE TOGGLE (E key) ======
-            KeyEvent.KEYCODE_E -> {
-                cornerEditMode = !cornerEditMode
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Edit mode: $cornerEditMode")
-                true
-            }
-
-            // ====== SAVE / CONFIRM (Enter or Space already handled above) ======
-            KeyEvent.KEYCODE_ENTER -> {
-                warpShapeManager.saveWarpShape(currentWarpShape)
-                Log.d("MainActivity", "[DEV] Warp shape saved: $currentWarpShape")
-                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
-                true
-            }
-
-            // ====== RESET (R key) ======
-            KeyEvent.KEYCODE_R -> {
-                currentWarpShape = WarpShape()
-                renderer.setWarpShape(currentWarpShape)
-                glSurfaceView.requestRender()
-                Log.d("MainActivity", "[DEV] Reset warp shape")
-                true
-            }
-
-            // ====== FINE ADJUSTMENTS (Shift + Arrow keys for smaller steps) ======
-            else -> {
-                // Only handle Shift modifiers for fine adjustments on non-DPAD keys
-                false
-            }
-        }
-    }
-
-    private fun togglePlayPauseAndEditMode() {
-        try {
-            if (exoPlayer.isPlaying) {
-                exoPlayer.pause()
-                cornerEditMode = true
-                Log.d("MainActivity", "[DEV] Paused + entered edit mode")
-            } else {
-                exoPlayer.play()
-                cornerEditMode = false
-                Log.d("MainActivity", "[DEV] Playing + exited edit mode")
-            }
-            glSurfaceView.requestRender()
-        } catch (e: Exception) {
-            Log.w("MainActivity", "togglePlayPauseAndEditMode failed: ${e.message}")
-        }
-    }
-
-    private fun prevCorner(c: Corner): Corner = when (c) {
-        Corner.TOP_LEFT -> Corner.BOTTOM_LEFT
-        Corner.BOTTOM_LEFT -> Corner.BOTTOM_RIGHT
-        Corner.BOTTOM_RIGHT -> Corner.TOP_RIGHT
-        Corner.TOP_RIGHT -> Corner.TOP_LEFT
-    }
-
-    private fun adjustWarp(adjustment: WarpAdjustment) {
-        currentWarpShape = when (adjustment) {
-            WarpAdjustment.TOP_UP -> currentWarpShape.copy(
-                topLeftX = currentWarpShape.topLeftX - warpAdjustmentStep,
-                topRightX = currentWarpShape.topRightX + warpAdjustmentStep
-            )
-            WarpAdjustment.BOTTOM_DOWN -> currentWarpShape.copy(
-                bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep,
-                bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
-            )
-            WarpAdjustment.LEFT_OUT -> currentWarpShape.copy(
-                topLeftX = currentWarpShape.topLeftX + warpAdjustmentStep,
-                bottomLeftX = currentWarpShape.bottomLeftX + warpAdjustmentStep
-            )
-            WarpAdjustment.RIGHT_OUT -> currentWarpShape.copy(
-                topRightX = currentWarpShape.topRightX - warpAdjustmentStep,
-                bottomRightX = currentWarpShape.bottomRightX - warpAdjustmentStep
-            )
-        }
-
-        renderer.setWarpShape(currentWarpShape)
-        glSurfaceView.requestRender()
-
-        Log.d("MainActivity", "Warp adjusted: $adjustment, shape: $currentWarpShape")
     }
 
     private fun adjustCorner(corner: Corner, dx: Float = 0f, dy: Float = 0f) {
@@ -766,6 +462,3 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class WarpAdjustment {
-    TOP_UP, BOTTOM_DOWN, LEFT_OUT, RIGHT_OUT
-}

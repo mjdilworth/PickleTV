@@ -1,191 +1,317 @@
-# PickleTV - Video Player with Keystone Adjustment
+# dil.map - Android TV Video Player with Keystone Correction
+
+**Developer**: Dilworth Creative LLC  
+**Package**: `com.dilworth.dilmap`  
+**Platform**: Android TV / Google TV  
+**Target Devices**: Any Android TV device (Google TV Streamer, Android TV boxes, projectors with Android TV)
 
 ## Overview
 
-PickleTV is an Android TV application that plays local or downloaded videos with real-time keystone/trapezoid adjustment capability. The app uses:
+dil.map is an Android TV application that streams video content with real-time keystone/trapezoid correction for projector alignment. The app features a Google TV-style home screen with browsable content, video download caching, and persistent keystone settings.
 
-- **ExoPlayer**: For video playback
-- **GLSurfaceView**: For OpenGL rendering
-- **GLSL Shaders**: For keystone/trapezoid warp transformation
-- **SharedPreferences**: For persistent warp shape storage
+### Key Technologies
+- **Jetpack Compose for TV**: Modern UI with TV-optimized navigation
+- **ExoPlayer**: Video playback and streaming
+- **OpenGL ES**: Real-time keystone correction via GLSL shaders
+- **Retrofit + Kotlin Coroutines**: Content manifest fetching
+- **SharedPreferences**: Persistent settings storage
+
+### Key Technologies
+- **Jetpack Compose for TV**: Modern UI with TV-optimized navigation
+- **ExoPlayer**: Video playback and streaming
+- **OpenGL ES**: Real-time keystone correction via GLSL shaders
+- **Retrofit + Kotlin Coroutines**: Content manifest fetching
+- **SharedPreferences**: Persistent settings storage
+
+---
 
 ## Features
 
-### 1. Video Playback
-- Plays local MP4 files (tested with `h-6.mp4`)
-- Uses ExoPlayer for robust video decoding and playback
-- Renders video via OpenGL for shader pipeline support
+### 🏠 Home Screen
+- **Browse Content**: View video thumbnails organized by category
+- **Sign In**: User authentication interface
+- **Settings**: Cache management and keystone reset
+- **Help**: Built-in remote control guide
+- **About**: App version, license, and contact information
 
-### 2. Keystone/Trapezoid Adjustment
-- **DPAD UP**: Pulls top of image inward (top-left and top-right adjustment)
-- **DPAD DOWN**: Pushes bottom of image outward (bottom-left and bottom-right adjustment)
-- **DPAD LEFT**: Pulls left side outward
-- **DPAD RIGHT**: Pulls right side inward
-- **ENTER/BUTTON_A**: Save warp shape to persistent storage
-- **DEL**: Reset warp shape to default (no distortion)
+### 📺 Video Playback
+- Stream videos from `https://tv.dilly.cloud/content`
+- Download and cache videos for offline playback
+- Resume cached videos instantly
+- Download progress indicator
 
-### 3. Warp Shape Persistence
-- Warp adjustments are automatically saved to SharedPreferences
-- Shape is restored when app restarts
-- Manual save via ENTER/BUTTON_A button
+### 🔧 Keystone Correction
+Real-time trapezoid adjustment for projector alignment:
+- **4-corner independent control**: Adjust each corner separately
+- **Whole-image adjustment**: Quick top/bottom/left/right adjustments
+- **Fine/coarse modes**: Toggle between 0.05 and 0.20 adjustment steps
+- **Persistent settings**: Saves across app restarts
+- **Visual feedback**: Corner markers and borders during editing
 
-## Architecture
+### 💾 Storage Management
+- Automatic video caching
+- Clear cache from Settings
+- Shows cache size
+- Reset keystone to defaults
 
-### Files
+---
 
-1. **MainActivity.kt**
-   - Main activity that sets up the UI and handles input
-   - Manages ExoPlayer lifecycle
-   - Processes remote/keyboard input for warp adjustments
-   - Integrates GLSurfaceView with ExoPlayer
+## 🎮 Remote Control Compatibility
 
-2. **VideoGLRenderer.kt**
-   - Implements GLSurfaceView.Renderer
-   - Manages OpenGL rendering pipeline
-   - Compiles and links vertex and fragment shaders
-   - Updates warp uniform values each frame
-   - Handles SurfaceTexture for video rendering
+### Supported Remotes
+The app uses **standard Android TV key codes** and works with:
+- ✅ **Google TV Streamer** (2024+)
+- ✅ **Android TV remotes** (any manufacturer)
+- ✅ **Projector remotes** (e.g., Valerian, Epson, BenQ with Android TV)
+- ✅ **Third-party Android TV remotes**
+- ✅ **Mobile remote apps** (Google TV app on phone)
 
-3. **WarpShape.kt**
-   - `WarpShape` data class: Stores 4 corner offset values
-   - `WarpShapeManager`: Handles SharedPreferences persistence
-   - Methods: `saveWarpShape()`, `loadWarpShape()`, `resetWarpShape()`
+**Required buttons** on your remote:
+- D-Pad (↑ ↓ ← →) and OK/Center button
+- Back button
 
-4. **Shaders** (embedded in VideoGLRenderer.kt)
-   - **Vertex Shader**: Applies trapezoid warp transformation
-     - Takes 4 corner offsets as uniforms
-     - Interpolates warp effect across the quad
-     - Outputs transformed vertex positions
-   
-   - **Fragment Shader**: Standard texture sampling
-     - Samples from video texture
-     - Applies color directly to fragment
+**Note**: Volume buttons control TV hardware directly and cannot be used for app controls.
 
-## Technical Details
+### Basic Navigation
+- **D-Pad ↑↓←→**: Navigate menus and content
+- **OK/Center**: Select item or save settings
+- **Back**: Return to previous screen
 
-### Shader Pipeline
+### Keystone Correction (During Video Playback)
 
-The vertex shader implements keystone correction by:
-1. Normalizing screen coordinates to 0-1 range
-2. Calculating left and right offset interpolation based on Y position
-3. Interpolating between left/right offset based on X position
-4. Applying horizontal offset to vertex positions
+**Interactive Menu System:**
+1. **Press D-Pad Center** → Opens keystone adjustment menu
+2. **Use D-Pad Up/Down** → Navigate menu options
+3. **Press D-Pad Center** → Select menu item
 
-This creates a smooth trapezoid warp across the entire viewport.
+**Menu Options:**
+- **Corner 1-4** → Enter adjustment mode for that corner
+- **Save Keystone** → Save current settings
+- **Exit Keystone** → Close menu
 
-### Warp Adjustment Values
+**Adjusting Corners:**
+1. Select a corner from menu → Enters adjustment mode
+2. Use **D-Pad arrows** → Move the selected corner
+3. Press **D-Pad Center** → Return to menu
+4. Press **Back** → Exit keystone adjustment
 
-- Stored as 4 floats: `topLeft`, `topRight`, `bottomLeft`, `bottomRight`
-- Values represent normalized displacement (-1.0 to 1.0)
-- Scaled by 0.1f in shader for reasonable visual adjustment
-- Each key press adjusts by 0.05f step
+### Keystone Workflow
+```
+1. Play video
+2. Press D-Pad Center → Keystone menu opens
+3. Navigate to "Corner 1 (Top Left)" → Press Center to select
+4. Use D-Pad arrows → Adjust corner position
+5. Press D-Pad Center → Return to menu
+6. Navigate to "Save Keystone" → Press Center to save
+7. Navigate to "Exit Keystone" → Press Center to close
+```
 
-### ExoPlayer Integration
+**Notes**: 
+- Menu provides visual feedback with highlighted selection
+- Toast messages guide you through each step
+- Corners show visual markers during adjustment
+- Settings persist across app restarts
 
-The SurfaceTexture created by OpenGL is wrapped in an `android.view.Surface` and passed to ExoPlayer:
+---
+
+## 🚀 Building for Google Play
+
+### Development Build
+```bash
+cd /home/dilly/AndroidStudioProjects/PickleTV
+./gradlew installDebug
+```
+
+### Release Build for Google Play Internal Testing
+```bash
+# Build Android App Bundle (AAB)
+./gradlew bundleRelease
+
+# Output location:
+# app/build/outputs/bundle/release/app-release.aab
+```
+
+### Version Management
+Before each release, update in `app/build.gradle.kts`:
 ```kotlin
-exoPlayer.setVideoSurface(surface)
+versionCode = 2        // Increment for each release
+versionName = "1.1.0"  // User-friendly version
 ```
 
-This allows ExoPlayer to decode video directly to the OpenGL texture.
+### Upload to Google Play Console
+1. Go to [Google Play Console](https://play.google.com/console)
+2. Select your app → **Internal Testing** track
+3. Click **Create new release**
+4. Upload `app-release.aab`
+5. Add release notes
+6. Click **Review** → **Start rollout**
 
-### Rendering Flow
+---
 
-1. `onSurfaceCreated`: Initialize shaders and textures
-2. `onSurfaceChanged`: Set viewport and projection matrix
-3. `onDrawFrame`: 
-   - Update SurfaceTexture from ExoPlayer
-   - Set warp uniforms
-   - Draw full-screen quad with warp transformation
+## 🛠️ Development Setup
 
-## Dependencies
+### Prerequisites
+- Android Studio Hedgehog or later
+- Android SDK 26+ (minSdk: 26, targetSdk: 36)
+- Google TV Streamer remote or emulator
 
-Added to `gradle/libs.versions.toml`:
-```toml
-exoplayer = "2.19.1"
+### Keyboard Shortcuts (Development)
+Development keyboard shortcuts for testing:
+
+| Keyboard | Simulates | Function |
+|----------|-----------|----------|
+| **V** or **Enter** | D-Pad Center | Open keystone menu |
+| **Arrow Up/Down** | D-Pad Up/Down | Navigate menu |
+| **Enter** | D-Pad Center | Select menu item / Return to menu |
+| **Arrow keys** | D-Pad arrows | Adjust corner position |
+| **Esc** | Back | Exit/Cancel |
+| **Del/R/0** | N/A | Reset keystone (dev only) |
+
+**Note**: The interactive menu system works identically on all Android TV remotes - just press D-Pad Center to open the menu.
+
+---
+
+---
+
+## 📁 Project Structure
+
+```
+app/src/main/java/com/dilworth/dilmap/
+├── HomeActivity.kt          # Main home screen with tabs
+├── MainActivity.kt          # Video player with keystone correction
+├── WelcomeActivity.kt       # Initial welcome/launcher screen
+├── VideoGLRenderer.kt       # OpenGL ES renderer with GLSL shaders
+├── WarpShape.kt            # Keystone data model and persistence
+├── data/
+│   ├── ContentRepository.kt     # Fetches video manifest
+│   ├── VideoDownloadManager.kt  # Handles video caching
+│   └── VideoItem.kt            # Video data model
+└── ui/
+    ├── components/              # Reusable UI components
+    └── theme/                   # Compose TV theme
+
+assets/                     # App icons and branding
 ```
 
-Added to `app/build.gradle.kts`:
-```kotlin
-implementation(libs.exoplayer.core)
-implementation(libs.exoplayer.ui)
+### Content Source
+Videos are fetched from: `https://tv.dilly.cloud/content/manifest.json`
+
+Example manifest format:
+```json
+{
+  "videos": [
+    {
+      "id": "1",
+      "title": "Sample Video",
+      "description": "Video description",
+      "thumbnailUrl": "https://tv.dilly.cloud/content/thumbnail.jpg",
+      "videoUrl": "https://tv.dilly.cloud/content/video.mp4",
+      "category": "Events"
+    }
+  ]
+}
 ```
 
-## Permissions
+---
 
-Required in `AndroidManifest.xml`:
-- `android.permission.READ_EXTERNAL_STORAGE` - To read video files
-- `android.permission.INTERNET` - For potential streaming
+---
 
-## Usage
+## 🔬 Technical Details
 
-### Playing a Video
-1. Place `h-6.mp4` in the project root directory
-2. Run the app
-3. Video will automatically start playing
+### Keystone Correction Implementation
+- **GLSL Vertex Shader**: Applies trapezoid warp transformation
+- **4 Corner Offsets**: Independent X/Y displacement for each corner
+- **Interpolation**: Smooth warping across the entire viewport
+- **Real-time Updates**: Adjustments applied immediately during playback
 
-### Adjusting Warp
-Use remote control or keyboard:
-- Arrow keys: Adjust trapezoid shape
-- Enter/A button: Save adjustments
-- Delete/Backspace: Reset to default
+### Data Persistence
+- **Keystone Settings**: Saved to SharedPreferences as 8 float values
+- **Video Cache**: Stored in app's cache directory
+- **Settings Survival**: Persists across app restarts and device reboots
 
-### Accessing Saved Warp Shape
-Warp shapes are saved in SharedPreferences at:
-```
-com.example.pickletv_preferences.xml (package-specific prefs)
-```
+### Performance
+- **Render Mode**: `WHEN_DIRTY` - only renders when needed (battery efficient)
+- **Video Decoding**: Hardware-accelerated via ExoPlayer
+- **OpenGL ES 2.0**: Broad device compatibility
 
-Keys:
-- `topLeft`, `topRight`, `bottomLeft`, `bottomRight` (float values)
+---
 
-## OpenGL Details
+## 📚 Documentation
 
-### Vertex Format
-- 3D positions: 4 vertices (full-screen quad)
-- 2D texture coordinates: 0-1 range
+- **[REMOTE_KEYBOARD_CONTROLS.md](REMOTE_KEYBOARD_CONTROLS.md)**: Complete control reference with workflows
+- **[GOOGLE_TV_STREAMER_TESTING.md](GOOGLE_TV_STREAMER_TESTING.md)**: Development testing guide
+- **[UPLOAD_TO_PLAY_STORE.md](UPLOAD_TO_PLAY_STORE.md)**: Google Play Console upload instructions
 
-### Rendering Mode
-- `RENDERMODE_WHEN_DIRTY`: Only renders when `requestRender()` is called
-- Saves battery on Android TV devices
+---
 
-### Matrix Projection
-- Orthographic projection: -1 to 1 in both X and Y
-- Near plane: -1, Far plane: 1
+---
 
-## Future Enhancements
+## 🐛 Troubleshooting
 
-Possible improvements:
-1. Vertical warp adjustment (Y-axis transformation)
-2. Rotation and scale transformations
-3. Multiple warp profiles (TV, Projector, etc.)
-4. GUI overlay for warp adjustment visualization
-5. Video playback controls (pause, seek, volume)
-6. Support for remote video sources
-7. Advanced color correction shader effects
+### Video Not Playing
+- Check network connection (videos stream from tv.dilly.cloud)
+- View download progress indicator if video is caching
+- Check logcat for network errors: `adb logcat | grep "ContentRepository\|VideoDownload"`
 
-## Known Limitations
+### Keystone Adjustment Not Working
+- **Enable corner edit mode first**: Press Volume Up (or V key)
+- Look for visual indicators (corner markers and borders)
+- Keystone only works during video playback, not on home screen
+- Check logs: `adb logcat | grep "Google TV Remote\|Keyboard"`
 
-1. Currently only supports horizontal (keystone) warp
-2. GL_TEXTURE_2D used instead of GL_TEXTURE_EXTERNAL_OES for compatibility
-3. No UI overlays for adjustment visualization
-4. Limited to single video file at startup
+### Settings Not Persisting
+- Settings are saved when you press OK/Center during video playback
+- Look for toast message: "✓ Keystone position saved"
+- Reset from Settings → Keystone Correction → Reset Keystone
 
-## Troubleshooting
+### Cache Issues
+- Clear cache from Settings tab
+- Check cache size in Settings
+- Cache location: `{app_data}/cache/video_cache/`
 
-### Video not playing
-- Ensure `h-6.mp4` is in the correct directory
-- Check logcat for "Video file not found"
-- Verify file permissions
+### Help Tab Not Scrolling
+- Each section is focusable - use D-Pad Down to navigate between sections
+- Scroll indicator at bottom shows when more content available
 
-### Warp not appearing
-- Check if render is being called (use RENDERMODE_CONTINUOUS for debugging)
-- Verify shader compilation (check logcat for "Program link error")
-- Ensure warp values are being updated
+---
 
-### Performance issues
-- Consider reducing video resolution
-- Check for shader compilation errors
-- Monitor GPU usage with Android Profiler
+## 📱 Device Compatibility
 
-# PickleTV
+**Tested On:**
+- Google TV Streamer (2024)
+- Android TV Emulator (x86, API 33+)
+
+**Requirements:**
+- Android TV / Google TV
+- API Level 26+ (Android 8.0+)
+- OpenGL ES 2.0 support
+- Internet connection for content streaming
+
+---
+
+## 📄 License
+
+Copyright © 2025 Dilworth Creative LLC. All rights reserved.
+
+---
+
+## 🆘 Support
+
+For issues or questions:
+- Check the **Help** tab in the app for remote control guide
+- Check the **About** tab for version and contact information
+- Review [REMOTE_KEYBOARD_CONTROLS.md](REMOTE_KEYBOARD_CONTROLS.md) for detailed controls
+- See [GOOGLE_TV_STREAMER_TESTING.md](GOOGLE_TV_STREAMER_TESTING.md) for development testing
+
+**Contact:**
+- 🌐 Website: [lucindadilworth.com](https://lucindadilworth.com)
+- 📧 Email: hello@lucindadilworth.com
+- 📱 Instagram: [@dil.worth](https://instagram.com/dil.worth)
+
+---
+
+**Version**: 1.0.1 (Build 2)  
+**Last Updated**: December 4, 2025  
+**Package**: com.dilworth.dilmap  
+**Developer**: Dilworth Creative LLC  
+**Website**: [lucindadilworth.com](https://lucindadilworth.com)

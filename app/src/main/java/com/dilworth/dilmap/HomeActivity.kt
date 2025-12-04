@@ -109,7 +109,7 @@ fun HomeScreen(
     var downloadingVideoId by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
 
-    val tabs = listOf("Browse Content", "Sign In", "Settings", "Help")
+    val tabs = listOf("Browse Content", "Sign In", "Settings", "Help", "About")
 
     // Load content on first composition
     LaunchedEffect(Unit) {
@@ -204,6 +204,9 @@ fun HomeScreen(
             }
             selectedTab == 3 -> {
                 HelpScreen()
+            }
+            selectedTab == 4 -> {
+                AboutScreen()
             }
         }
     }
@@ -704,7 +707,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                 .fillMaxSize()
                 .padding(48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
+            contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
             item {
@@ -712,7 +716,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(horizontal = 32.dp, vertical = 16.dp),
+                        .padding(horizontal = 32.dp, vertical = 16.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start
                 ) {
                     Text(
@@ -723,7 +728,7 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     )
 
                     Text(
-                        text = "Google TV Streamer Remote Controls",
+                        text = "Remote Controls",
                         style = MaterialTheme.typography.titleMedium,
                         color = Color(0xFF4A90E2),
                         modifier = Modifier.padding(top = 8.dp)
@@ -737,7 +742,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(32.dp),
+                        .padding(32.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start
                 ) {
                     ControlGroup(
@@ -757,7 +763,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(32.dp),
+                        .padding(32.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start
                 ) {
                     ControlGroup(
@@ -776,17 +783,18 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(32.dp),
+                        .padding(32.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start
                 ) {
                     ControlGroup(
                         title = "Keystone Correction (During Video)",
                         controls = listOf(
-                            "Volume Up" to "Toggle corner edit mode (show/hide corners)",
-                            "Volume Down" to "Cycle through corners (TL→TR→BR→BL)",
-                            "D-Pad arrows" to "Adjust selected corner position",
-                            "Mute" to "Toggle fine/coarse adjustment speed",
-                            "OK/Center" to "Save keystone settings"
+                            "D-Pad Center" to "Open keystone adjustment menu",
+                            "D-Pad Up/Down" to "Navigate menu options",
+                            "D-Pad Center (on menu item)" to "Select option",
+                            "D-Pad arrows (in adjust mode)" to "Move selected corner",
+                            "Back" to "Exit keystone menu"
                         )
                     )
                 }
@@ -798,7 +806,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(32.dp),
+                        .padding(32.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -816,11 +825,11 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         WorkflowStep("1", "Play a video")
-                        WorkflowStep("2", "Press Volume Up → Corners appear")
-                        WorkflowStep("3", "Press Volume Down → Select corner")
+                        WorkflowStep("2", "Press D-Pad Center → Menu opens")
+                        WorkflowStep("3", "Navigate to a corner → Press Center")
                         WorkflowStep("4", "Use D-Pad arrows → Adjust corner")
-                        WorkflowStep("5", "Press Mute → Toggle fine/coarse adjustment")
-                        WorkflowStep("6", "Press OK/Center → Save settings")
+                        WorkflowStep("5", "Press D-Pad Center → Back to menu")
+                        WorkflowStep("6", "Select 'Save Keystone' → Press Center")
                     }
                 }
             }
@@ -831,7 +840,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(700.dp)
                         .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                        .padding(32.dp),
+                        .padding(32.dp)
+                        .focusable(),
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -842,7 +852,8 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
-                    TipItem("Keystone adjustments only work when corner edit mode is enabled")
+                    TipItem("Press D-Pad Center during video to open keystone menu")
+                    TipItem("Menu provides visual guide - no need to memorize controls")
                     TipItem("Settings persist across app restarts")
                     TipItem("Use Settings → Reset Keystone to restore defaults")
                     TipItem("Downloaded videos show a ✓ icon and play instantly")
@@ -867,6 +878,190 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun AboutScreen(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize()) {
+        TvLazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // App Info
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(700.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp)
+                        .focusable(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "dil.map",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Color.White
+                    )
+
+                    Text(
+                        text = "Video Player with Keystone Correction",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFF90CAF9)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Version ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            // License Information
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(700.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp)
+                        .focusable(),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "License",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Text(
+                        text = "Copyright © 2025 Dilworth Creative LLC",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White
+                    )
+
+                    Text(
+                        text = "All rights reserved.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            // Contact Information
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(700.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp)
+                        .focusable(),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Contact",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "🌐 Website:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF90CAF9),
+                            modifier = Modifier.width(120.dp)
+                        )
+                        Text(
+                            text = "lucindadilworth.com",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "📧 Email:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF90CAF9),
+                            modifier = Modifier.width(120.dp)
+                        )
+                        Text(
+                            text = "hello@lucindadilworth.com",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "📱 Instagram:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF90CAF9),
+                            modifier = Modifier.width(120.dp)
+                        )
+                        Text(
+                            text = "@dil.worth",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Developer Info
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(700.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp)
+                        .focusable(),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Developer",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Text(
+                        text = "Dilworth Creative LLC",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White
+                    )
+
+                    Text(
+                        text = "Package: com.dilworth.dilmap",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
         }
     }
 }
