@@ -1,4 +1,4 @@
-package com.pickletv.app
+package com.dilworth.dilmap
 
 import android.content.Context
 import android.content.SharedPreferences

@@ -210,7 +210,7 @@ Your server should have `https://tv.dilly.cloud/content/content.json`:
 ### App Specifications
 - **Min SDK**: 26 (Android 8.0)
 - **Target SDK**: 36 (Android 15)
-- **Namespace**: com.pickletv.app
+- **Namespace**: com.dilworth.dilmap
 - **Current Version**: 1.0
 
 ---

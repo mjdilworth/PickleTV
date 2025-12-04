@@ -1,11 +1,11 @@
-# PickleTV - Complete Control Reference
-## Keystone Correction Controls for TV Remote & Keyboard
+# dil.map - Complete Control Reference
+## Keystone Correction Controls for Google TV Streamer Remote & Keyboard
 
 This guide covers all available controls for adjusting keystone/trapezoid correction during video playback.
 
 ---
 
-## 🎮 TV Remote Controls (Production - Always Available)
+## 🎮 Google TV Streamer Remote (Primary Controls)
 
 ### Basic Image Adjustment
 
@@ -21,14 +21,12 @@ This guide covers all available controls for adjusting keystone/trapezoid correc
 
 | Remote Button | Function | Details |
 |--------------|----------|---------|
-| **Menu** | Toggle corner edit mode | Shows/hides corner markers. Enables individual corner adjustment |
-| **Channel ↑** | Next corner | Cycles through corners: Top-Left → Top-Right → Bottom-Right → Bottom-Left |
-| **Channel ↓** | Previous corner | Cycles backwards through corners |
-| **Info/Guide** | Toggle adjustment speed | Switches between fine (0.05) and coarse (0.20) adjustment steps |
-| **B Button** | Reset to default | Removes all keystone correction (returns to flat/centered) |
+| **Volume Up** | Toggle corner edit mode | Shows/hides corner markers. Enables individual corner adjustment |
+| **Volume Down** | Next corner | Cycles through corners: Top-Left → Top-Right → Bottom-Right → Bottom-Left |
+| **Mute** | Toggle adjustment speed | Switches between fine (0.05) and coarse (0.20) adjustment steps |
 | **Back** | Exit video | Returns to home screen |
 
-### Remote Control Workflow Examples
+### Google TV Streamer Workflow Examples
 
 #### Quick Adjustment (Whole Image)
 ```
@@ -41,44 +39,50 @@ This guide covers all available controls for adjusting keystone/trapezoid correc
 #### Precise Corner-by-Corner Adjustment
 ```
 1. Play video
-2. Press Menu button → Enables corner edit mode (corners highlighted)
-3. Press Channel ↑ → Select which corner to adjust
+2. Press Volume Up → Enables corner edit mode (corners highlighted)
+3. Press Volume Down → Select which corner to adjust
 4. Use D-Pad arrows → Move that specific corner
-5. Press Channel ↑ again → Move to next corner
+5. Press Volume Down again → Move to next corner
 6. Repeat steps 4-5 for each corner
 7. Press OK/Center → Save all adjustments
 ```
 
-#### Reset and Start Over
+#### Toggle Adjustment Speed
 ```
-1. During video playback
-2. Press B button → Resets to no distortion
-3. Press OK/Center → Saves the reset state
+1. During corner editing
+2. Press Mute → Switch to fine adjustment (0.05 steps)
+3. Press Mute again → Switch to coarse adjustment (0.20 steps)
+4. Use D-Pad for precise control
 ```
 
 ---
 
-## ⌨️ Keyboard Controls (Development - Debug Builds Only)
+## ⌨️ Keyboard Controls (Development - Simulates Google TV Streamer Remote)
 
-### Play/Pause & Edit Mode
+### Keyboard Keys Mapped to Remote Buttons
+
+| Keyboard Key | Simulates Remote | Function |
+|-------------|------------------|----------|
+| **Arrow ↑** | D-Pad ↑ | Pull top inward |
+| **Arrow ↓** | D-Pad ↓ | Push bottom outward |
+| **Arrow ←** | D-Pad ← | Push left outward |
+| **Arrow →** | D-Pad → | Pull right inward |
+| **Enter** | OK/Center | Save adjustments |
+| **V** | Volume Up | Toggle corner edit mode |
+| **B** | Volume Down | Next corner |
+| **M** | Mute | Toggle adjustment speed |
+| **Esc** | Back | Exit video |
+
+### Additional Development Shortcuts
 
 | Key | Function | Details |
 |-----|----------|---------|
-| **P** | Toggle play/pause + edit mode | Pauses video and enters edit mode; resumes and exits edit mode |
+| **P** | Toggle play/pause + edit mode | Pauses video and enters edit mode |
 | **Space** | Same as P | Alternative play/pause toggle |
-| **E** | Toggle corner edit mode | Shows/hides corner markers without pausing |
-| **Esc** | Exit edit mode | Disables corner markers |
+| **E** | Toggle corner edit mode | Same as V key (Volume Up) |
+| **N** | Next corner | Same as B key (Volume Down) |
 
-### Directional Navigation (Arrow Keys = D-Pad)
-
-| Key | Same as Remote | Function | In Edit Mode |
-|-----|---------------|----------|--------------|
-| **↑** | D-Pad ↑ | Pull top inward | Move selected corner UP |
-| **↓** | D-Pad ↓ | Push bottom outward | Move selected corner DOWN |
-| **←** | D-Pad ← | Push left outward | Move selected corner LEFT |
-| **→** | D-Pad → | Pull right inward | Move selected corner RIGHT |
-
-### Corner Selection (Numpad)
+### Corner Selection (Numpad - Development Only)
 
 | Key | Function | Details |
 |-----|----------|---------|
@@ -86,11 +90,10 @@ This guide covers all available controls for adjusting keystone/trapezoid correc
 | **3** | Select TOP-RIGHT corner | Automatically enables edit mode |
 | **7** | Select BOTTOM-LEFT corner | Automatically enables edit mode |
 | **9** | Select BOTTOM-RIGHT corner | Automatically enables edit mode |
-| **N** | Next corner | Cycles through corners in order |
-| **Tab** | Next corner | Alternative to N key |
+| **Tab** | Next corner | Cycles forward |
 | **Shift+Tab** | Previous corner | Cycles backwards |
 
-### Quick Reset & Snap
+### Quick Reset & Snap (Development Only)
 
 | Key | Function | Details |
 |-----|----------|---------|
@@ -98,45 +101,29 @@ This guide covers all available controls for adjusting keystone/trapezoid correc
 | **R** | Reset warp shape | Same as 0 key |
 | **Del** | Reset warp shape | Same as 0 and R keys |
 
-### Adjustment Step Size
+### Adjustment Step Size (Development Only)
 
-| Key | Same as Remote | Function | Range |
-|-----|---------------|----------|-------|
-| **]** | - | Increase step size | Makes adjustments faster (max 0.50) |
-| **[** | - | Decrease step size | Makes adjustments finer (min 0.01) |
+| Key | Function | Range |
+|-----|----------|-------|
+| **]** | Increase step size | Makes adjustments faster (max 0.50) |
+| **[** | Decrease step size | Makes adjustments finer (min 0.01) |
 
 Default steps:
 - Fine adjustment: **0.05** per keypress
 - Large adjustment: **0.20** (4x fine)
 
-### Save & Actions
-
-| Key | Same as Remote | Function |
-|-----|---------------|----------|
-| **Enter** | OK/Center | Save current keystone shape to storage |
-| **C** | - | Legacy toggle for corner edit mode |
-
-### Whole Shape Movement (Advanced)
+### Display & Debugging (Development Only)
 
 | Key | Function | Details |
 |-----|----------|---------|
-| **Page Up** | Move shape UP | Tilts entire shape: top inward, bottom outward |
-| **Page Down** | Move shape DOWN | Tilts entire shape: top outward, bottom inward |
-| **Volume +** | Move frame RIGHT | Shifts entire shape horizontally right |
-| **Volume −** | Move frame LEFT | Shifts entire shape horizontally left |
-
-### Display & Debugging
-
-| Key | Function | Details |
-|-----|----------|---------|
-| **M** | Toggle overlay grid | Shows/hides adjustment grid overlay |
 | **F1** | Toggle input logging | Enables/disables verbose keyboard logging in logcat |
+| **C** | Toggle corner edit mode | Legacy shortcut |
 
 ---
 
 ## 📋 Common Workflows
 
-### Workflow 1: Quick Keystone Correction (TV Remote)
+### Workflow 1: Quick Keystone Correction (Google TV Streamer Remote)
 
 **Goal**: Quickly fix trapezoid distortion for a projector
 
@@ -152,21 +139,21 @@ Default steps:
 
 ---
 
-### Workflow 2: Precise Corner Adjustment (TV Remote)
+### Workflow 2: Precise Corner Adjustment (Google TV Streamer Remote)
 
 **Goal**: Perfect alignment for each corner individually
 
 ```
 1. Play video
-2. Menu button → Enable corner edit mode (corners appear)
-3. Channel ↑ → Select top-left corner (highlighted in cyan)
+2. Volume Up → Enable corner edit mode (corners appear)
+3. Volume Down → Select top-left corner (highlighted in cyan)
 4. D-Pad ← (4 times) → Move corner left
 5. D-Pad ↑ (2 times) → Move corner up
-6. Channel ↑ → Select top-right corner
+6. Volume Down → Select top-right corner
 7. D-Pad → (3 times) → Adjust right edge
-8. Channel ↑ → Select bottom-right corner
+8. Volume Down → Select bottom-right corner
 9. D-Pad → → D-Pad ↓ → Adjust corner position
-10. Channel ↑ → Select bottom-left corner
+10. Volume Down → Select bottom-left corner
 11. D-Pad ← → D-Pad ↓ → Adjust final corner
 12. OK button → Save all adjustments
 ```
@@ -175,39 +162,36 @@ Default steps:
 
 ---
 
-### Workflow 3: Fine-Tuning with Speed Control (TV Remote)
+### Workflow 3: Fine-Tuning with Speed Control (Google TV Streamer Remote)
 
 **Goal**: Make very precise micro-adjustments
 
 ```
 1. Play video
-2. Menu → Enable corner edit
-3. Info/Guide button → Switch to fine adjustment mode (0.05 step)
-4. Channel ↑ → Select corner
+2. Volume Up → Enable corner edit
+3. Mute button → Switch to fine adjustment mode (0.05 step)
+4. Volume Down → Select corner
 5. D-Pad arrows → Make tiny precise adjustments
-6. Channel ↑ → Next corner
+6. Volume Down → Next corner
 7. Repeat steps 5-6 for all corners
 8. OK → Save
 ```
 
 ---
 
-### Workflow 4: Development Testing (Keyboard)
+### Workflow 4: Development Testing (Keyboard - Simulates Remote)
 
 **Goal**: Rapid testing and calibration during development
 
 ```
 1. P → Pause and enter edit mode
-2. ] ] → Increase step size for faster adjustments
-3. 1 → Select top-left corner
-4. ←←←← ↑↑ → Adjust corner quickly
-5. N → Next corner (top-right)
-6. →→→ → Adjust right edge
-7. 0 → Reset if needed to start over
-8. [ → Decrease step for fine-tuning
-9. ↑ → Make tiny adjustment
-10. Enter → Save final result
-11. P → Resume playback
+2. V → Enable corner edit (simulates Volume Up)
+3. B → Select corner (simulates Volume Down)
+4. Arrow keys → Adjust corner
+5. B → Next corner
+6. M → Toggle fine/coarse (simulates Mute)
+7. Enter → Save (simulates OK button)
+8. P → Resume playback
 ```
 
 **Time**: 30-60 seconds with keyboard shortcuts
@@ -227,8 +211,8 @@ Default steps:
     └─────────────┘
 7 (Bottom-Left)   9 (Bottom-Right)
 
-Channel ↑: 1 → 3 → 9 → 7 → 1 (cycles)
-Channel ↓: 7 → 9 → 3 → 1 → 7 (reverse)
+Volume Down: 1 → 3 → 9 → 7 → 1 (cycles)
+Numpad (dev): Direct selection
 ```
 
 ### D-Pad Adjustment Direction (Normal Mode)
@@ -257,7 +241,7 @@ Channel ↓: 7 → 9 → 3 → 1 → 7 (reverse)
 - Each video starts with the last saved keystone correction
 
 ### Manual Reset
-- Press **0**, **R**, or **Del** (keyboard) or **B button** (remote)
+- Press **0**, **R**, or **Del** (keyboard only)
 - Press OK/Enter to save the reset state
 - Restart app to reload previous saved settings if you didn't save the reset
 
@@ -282,68 +266,70 @@ Channel ↓: 7 → 9 → 3 → 1 → 7 (reverse)
 ## 🆘 Troubleshooting
 
 ### Issue: Adjustments not saving
-**Solution**: Make sure to press OK/Enter button after making changes
+**Solution**: Make sure to press OK/Center button after making changes
 
 ### Issue: Image is too distorted
-**Solution**: Press B button (remote) or 0 key (keyboard) to reset to default
+**Solution**: Press 0 key (keyboard) to reset to default, then press Enter to save
 
 ### Issue: Corner edit mode won't enable
-**Solution**: Press Menu button (remote) or E/C key (keyboard)
+**Solution**: Press Volume Up button (remote) or V/E key (keyboard)
 
 ### Issue: Adjustments are too large/small
-**Solution**: Press Info/Guide button (remote) or [ ] keys (keyboard) to change step size
+**Solution**: Press Mute button (remote) or M key (keyboard) to toggle fine/coarse adjustment
 
 ### Issue: Can't see which corner is selected
-**Solution**: Make sure corner edit mode is enabled (Menu button or E key)
+**Solution**: Make sure corner edit mode is enabled (Volume Up or V key)
 
 ---
 
-## 📱 Remote Button Reference (Common TV Remotes)
+## 📱 Google TV Streamer Remote Button Reference
 
-Different TV remotes may have slightly different button labels:
+The Google TV Streamer (2024+) has these buttons:
 
-| Our Name | Alternative Names | Common Symbols |
-|----------|------------------|----------------|
-| OK/Center | Select, Enter | ⏺, ✓ |
-| Menu | Settings, Options | ☰, ⚙ |
-| Channel ↑ | CH+, Page Up | ▲, + |
-| Channel ↓ | CH-, Page Down | ▼, - |
-| Info | Display, i | ℹ️, 📋 |
-| Guide | EPG | 📺 |
-| B Button | Cancel, Clear | ⭕, ✕ |
-| Back | Return, Exit | ◀, ← |
+| Button | Symbol | Usage in dil.map |
+|--------|--------|------------------|
+| D-Pad | ↑↓←→ | Keystone adjustment |
+| OK/Center | ⏺ | Save settings |
+| Back | ← | Exit video |
+| Home | 🏠 | Return to Android TV home |
+| Volume Up | 🔊+ | Toggle corner edit mode |
+| Volume Down | 🔉− | Cycle through corners |
+| Mute | 🔇 | Toggle adjustment speed |
+| Power | ⏻ | Device power |
+| Assistant | 🎤 | Google Assistant (unused) |
 
 ---
 
 ## 🎓 Tips & Best Practices
 
 1. **Start with whole-image adjustment** (D-Pad only) before switching to corner edit mode
-2. **Use coarse adjustments first**, then switch to fine mode for precision
+2. **Use coarse adjustments first** (default 0.05), then fine-tune with Mute button
 3. **Save frequently** - Press OK/Center after each major adjustment
 4. **Test at full brightness** - Keystone correction is easier to see with bright video content
-5. **Adjust with content playing** - Easier to see alignment with actual video, not black screen
-6. **Use channel buttons** to quickly compare corner positions
-7. **Reset and try again** if you get lost - B button resets everything
+5. **Adjust with content playing** - Easier to see alignment with actual video
+6. **Cycle through corners** with Volume Down to compare positions
+7. **Reset if needed** - Use 0 key (keyboard only) if you get lost
 
 ---
 
 ## Summary
 
-### TV Remote (All Users)
+### Google TV Streamer Remote (All Users)
 - **Basic**: D-Pad arrows + OK button
-- **Advanced**: Menu, Channel ↑↓, Info/Guide, B button
+- **Advanced**: Volume Up (edit mode), Volume Down (cycle corners), Mute (speed)
 - **Most common**: D-Pad + OK for quick adjustments
 
 ### Keyboard (Developers Only)
-- **Full control**: All features accessible
-- **Faster workflow**: Numpad corner selection, step size control
-- **Debugging**: Input logging, overlay grid
+- **Simulates remote**: V (Vol+), B (Vol−), M (Mute), Enter (OK)
+- **Extra features**: Numpad corner selection, step size control ([ ])
+- **Debugging**: Input logging (F1)
 
-Both control schemes save to the same settings and work identically - choose based on your input device!
+Both control schemes save to the same settings and work identically!
 
 ---
 
-**Last Updated**: December 2025  
+**Last Updated**: December 4, 2025  
 **App Version**: 1.0  
-**Platform**: Android TV / Fire TV
+**Platform**: Android TV / Google TV
+**Remote**: Google TV Streamer (2024+)
 

@@ -1,4 +1,4 @@
-package com.pickletv.app
+package com.dilworth.dilmap
 
 import android.content.pm.ApplicationInfo
 import android.net.Uri
@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.InputDevice
 import android.view.Surface
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
@@ -291,73 +292,122 @@ class MainActivity : ComponentActivity() {
                 true
             }
 
-            // DPAD adjusts either whole warp (legacy) or selected corner when in corner mode
+            // DPAD adjusts keystone ONLY when corner edit mode is enabled
             KeyEvent.KEYCODE_DPAD_UP -> {
-                if (cornerEditMode) adjustCorner(selectedCorner, dy = -warpAdjustmentStep) else adjustWarp(WarpAdjustment.TOP_UP)
-                true
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dy = -warpAdjustmentStep)
+                    true
+                } else {
+                    false // Allow default navigation behavior when edit mode is off
+                }
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (cornerEditMode) adjustCorner(selectedCorner, dy = warpAdjustmentStep) else adjustWarp(WarpAdjustment.BOTTOM_DOWN)
-                true
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dy = warpAdjustmentStep)
+                    true
+                } else {
+                    false // Allow default navigation behavior when edit mode is off
+                }
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (cornerEditMode) adjustCorner(selectedCorner, dx = -warpAdjustmentStep) else adjustWarp(WarpAdjustment.LEFT_OUT)
-                true
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
+                    true
+                } else {
+                    false // Allow default navigation behavior when edit mode is off
+                }
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (cornerEditMode) adjustCorner(selectedCorner, dx = warpAdjustmentStep) else adjustWarp(WarpAdjustment.RIGHT_OUT)
-                true
+                if (cornerEditMode) {
+                    adjustCorner(selectedCorner, dx = warpAdjustmentStep)
+                    true
+                } else {
+                    false // Allow default navigation behavior when edit mode is off
+                }
             }
 
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER -> {
                 // Save warp shape on confirm
                 warpShapeManager.saveWarpShape(currentWarpShape)
                 Log.d("MainActivity", "Warp shape saved: $currentWarpShape")
+                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
                 true
             }
 
-            // TV Remote: Menu button toggles corner edit mode
-            KeyEvent.KEYCODE_MENU -> {
+            // ====== GOOGLE TV STREAMER REMOTE CONTROLS ======
+
+            // Volume Up toggles corner edit mode (replaces Menu button)
+            KeyEvent.KEYCODE_VOLUME_UP -> {
                 cornerEditMode = !cornerEditMode
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "Remote: Corner edit mode: $cornerEditMode")
+                Log.d("MainActivity", "Google TV Remote: Corner edit mode: $cornerEditMode")
                 true
             }
 
-            // TV Remote: Channel Up/Down to cycle through corners
-            KeyEvent.KEYCODE_CHANNEL_UP -> {
+            // Volume Down cycles through corners (replaces Channel Up)
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
                 selectedCorner = selectedCorner.next()
                 if (!cornerEditMode) cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "Remote: Next corner: $selectedCorner")
+                Log.d("MainActivity", "Google TV Remote: Next corner: $selectedCorner")
                 true
             }
 
-            KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                selectedCorner = prevCorner(selectedCorner)
+            // Mute toggles fine/coarse adjustment speed (replaces Info/Guide)
+            KeyEvent.KEYCODE_MUTE -> {
+                // Swap step sizes
+                val temp = warpAdjustmentStep
+                warpAdjustmentStep = largeAdjustmentStep
+                largeAdjustmentStep = temp
+                Log.d("MainActivity", "Google TV Remote: Adjustment step toggled to $warpAdjustmentStep")
+                true
+            }
+
+            // ====== KEYBOARD SIMULATION OF GOOGLE TV STREAMER ======
+
+            // V key simulates Volume Up (corner edit toggle)
+            KeyEvent.KEYCODE_V -> {
+                cornerEditMode = !cornerEditMode
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "Keyboard (V): Corner edit mode: $cornerEditMode")
+                true
+            }
+
+            // B key simulates Volume Down (next corner)
+            KeyEvent.KEYCODE_B -> {
+                selectedCorner = selectedCorner.next()
                 if (!cornerEditMode) cornerEditMode = true
                 glSurfaceView.requestRender()
-                Log.d("MainActivity", "Remote: Previous corner: $selectedCorner")
+                Log.d("MainActivity", "Keyboard (B): Next corner: $selectedCorner")
                 true
             }
 
-            // TV Remote: Long press on OK/Select to reset warp
+            // M key simulates Mute (toggle adjustment speed)
+            KeyEvent.KEYCODE_M -> {
+                val temp = warpAdjustmentStep
+                warpAdjustmentStep = largeAdjustmentStep
+                largeAdjustmentStep = temp
+                Log.d("MainActivity", "Keyboard (M): Adjustment step toggled to $warpAdjustmentStep")
+                true
+            }
+
+            // ====== LEGACY DEVELOPMENT SHORTCUTS ======
+
+            // E/C keys also toggle corner edit mode (legacy)
+            KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_C -> {
+                cornerEditMode = !cornerEditMode
+                glSurfaceView.requestRender()
+                Log.d("MainActivity", "Keyboard: Corner edit mode: $cornerEditMode")
+                true
+            }
+
+            // Reset warp shape (keyboard only)
             KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_BUTTON_B -> {
                 // Reset warp shape
                 currentWarpShape = WarpShape()
                 renderer.setWarpShape(currentWarpShape)
                 glSurfaceView.requestRender()
                 Log.d("MainActivity", "Warp shape reset")
-                true
-            }
-
-            // TV Remote: Info/Guide button for fine adjustment toggle
-            KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_GUIDE -> {
-                // Toggle between fine and coarse adjustment
-                val temp = warpAdjustmentStep
-                warpAdjustmentStep = largeAdjustmentStep
-                largeAdjustmentStep = temp
-                Log.d("MainActivity", "Remote: Step size toggled to $warpAdjustmentStep")
                 true
             }
 
@@ -378,43 +428,42 @@ class MainActivity : ComponentActivity() {
             }
 
             // ====== DIRECTIONAL CONTROLS (Arrow Keys) ======
-            // Arrow keys map to DPAD for corner adjustment
-            // UP/DOWN = vertical movement, LEFT/RIGHT = horizontal movement
+            // Arrow keys adjust keystone ONLY when corner edit mode is enabled
             KeyEvent.KEYCODE_DPAD_UP -> {
                 Log.d("MainActivity", "[KEY] DPAD_UP pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
                 if (cornerEditMode) {
                     adjustCorner(selectedCorner, dy = warpAdjustmentStep)  // UP = positive Y
+                    true
                 } else {
-                    adjustWarp(WarpAdjustment.TOP_UP)
+                    false // Let default handler manage navigation
                 }
-                true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 Log.d("MainActivity", "[KEY] DPAD_DOWN pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
                 if (cornerEditMode) {
                     adjustCorner(selectedCorner, dy = -warpAdjustmentStep)  // DOWN = negative Y
+                    true
                 } else {
-                    adjustWarp(WarpAdjustment.BOTTOM_DOWN)
+                    false // Let default handler manage navigation
                 }
-                true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 Log.d("MainActivity", "[KEY] DPAD_LEFT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
                 if (cornerEditMode) {
                     adjustCorner(selectedCorner, dx = -warpAdjustmentStep)
+                    true
                 } else {
-                    adjustWarp(WarpAdjustment.LEFT_OUT)
+                    false // Let default handler manage navigation
                 }
-                true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 Log.d("MainActivity", "[KEY] DPAD_RIGHT pressed, cornerEditMode=$cornerEditMode, selectedCorner=$selectedCorner")
                 if (cornerEditMode) {
                     adjustCorner(selectedCorner, dx = warpAdjustmentStep)
+                    true
                 } else {
-                    adjustWarp(WarpAdjustment.RIGHT_OUT)
+                    false // Let default handler manage navigation
                 }
-                true
             }
 
             // ====== CORNER SELECTION & CYCLING ======
@@ -584,6 +633,7 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_ENTER -> {
                 warpShapeManager.saveWarpShape(currentWarpShape)
                 Log.d("MainActivity", "[DEV] Warp shape saved: $currentWarpShape")
+                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
                 true
             }
 

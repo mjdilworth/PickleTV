@@ -1,4 +1,4 @@
-package com.pickletv.app.ui.theme
+package com.dilworth.dilmap.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable

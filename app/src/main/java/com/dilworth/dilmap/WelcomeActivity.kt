@@ -1,4 +1,4 @@
-package com.pickletv.app
+package com.dilworth.dilmap
 
 import android.content.Intent
 import android.net.Uri

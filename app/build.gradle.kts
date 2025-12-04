@@ -8,17 +8,17 @@ plugins {
 }
 
 android {
-    namespace = "com.pickletv.app"
+    namespace = "com.dilworth.dilmap"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.pickletv.app"
+        applicationId = "com.dilworth.dilmap"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
         // Provide default for all variants
         buildConfigField("String", "DEBUG_VIDEO_FILE_NAME", "\"h-6.mp4\"")
     }

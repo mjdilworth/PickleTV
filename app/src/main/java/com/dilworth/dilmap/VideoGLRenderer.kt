@@ -1,4 +1,4 @@
-package com.pickletv.app
+package com.dilworth.dilmap
 
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20

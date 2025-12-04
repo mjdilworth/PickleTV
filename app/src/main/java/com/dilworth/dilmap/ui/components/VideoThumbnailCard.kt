@@ -1,4 +1,4 @@
-package com.pickletv.app.ui.components
+package com.dilworth.dilmap.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,7 +17,7 @@ import androidx.tv.foundation.lazy.list.TvLazyRow
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.pickletv.app.data.VideoItem
+import com.dilworth.dilmap.data.VideoItem
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -131,7 +131,7 @@ fun CategorySection(
     title: String,
     videos: List<VideoItem>,
     onVideoClick: (VideoItem) -> Unit,
-    downloadManager: com.pickletv.app.data.VideoDownloadManager,
+    downloadManager: com.dilworth.dilmap.data.VideoDownloadManager,
     downloadingVideoId: String?,
     modifier: Modifier = Modifier
 ) {
