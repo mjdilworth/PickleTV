@@ -6,12 +6,15 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -96,6 +100,63 @@ class HomeActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "HomeActivity"
+    }
+}
+
+/**
+ * Standard button component used across all screens for consistency
+ */
+@Composable
+fun StandardButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    containerColor: Color = Color(0xFF4A90E2),
+    contentColor: Color = Color.White,
+    isLoading: Boolean = false
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    Box(
+        modifier = modifier
+            .height(60.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focusState ->
+                isFocused = focusState.isFocused || focusState.hasFocus
+            }
+            .focusable(enabled = enabled && !isLoading)
+            .background(
+                color = when {
+                    !enabled -> containerColor.copy(alpha = 0.5f)
+                    isFocused -> containerColor // Full brightness when focused
+                    else -> containerColor.copy(alpha = 0.75f) // Dimmer when not focused
+                },
+                shape = RoundedCornerShape(8.dp)
+            )
+            .border(
+                width = if (isFocused) 4.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable(enabled = enabled && !isLoading) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                color = contentColor,
+                strokeWidth = 3.dp
+            )
+        } else {
+            Text(
+                text = text,
+                fontSize = if (isFocused) 22.sp else 20.sp,
+                color = contentColor,
+                fontWeight = if (isFocused) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+            )
+        }
     }
 }
 
@@ -543,74 +604,61 @@ fun SignInScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp)
-                            .background(
-                                color = if (isLoading) Color(0xFF1A1A1A) else Color(0xFF2A2A2A),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable(enabled = !isLoading) { onCancel() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            fontSize = 20.sp,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    }
+                    StandardButton(
+                        text = "Cancel",
+                        onClick = onCancel,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading,
+                        containerColor = Color(0xFF2A2A2A)
+                    )
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(60.dp)
-                            .background(
-                                color = if (!isLoading && email.isNotEmpty()) Color(0xFF4A90E2) else Color(0xFF2A5A82),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable(enabled = !isLoading && email.isNotEmpty()) {
-                                if (email.isNotEmpty()) {
-                                    isLoading = true
-                                    scope.launch {
-                                        val result = magicLinkService.requestMagicLink(email)
-                                        isLoading = false
+                    StandardButton(
+                        text = "Send Link",
+                        onClick = {
+                            if (email.isNotEmpty()) {
+                                isLoading = true
+                                scope.launch {
+                                    val result = magicLinkService.requestMagicLink(email)
+                                    isLoading = false
 
-                                        result.onSuccess { message ->
-                                            statusMessage = null
-                                            isError = false
-                                            isPolling = true // Start polling
-                                            Log.d("SignInScreen", "Magic link sent to $email, starting polling")
-                                        }.onFailure { error ->
-                                            statusMessage = error.message ?: "Failed to send magic link"
-                                            isError = true
-                                            Log.e("SignInScreen", "Failed to send magic link: ${error.message}")
-                                        }
+                                    result.onSuccess { message ->
+                                        statusMessage = null
+                                        isError = false
+                                        isPolling = true
+                                        Log.d("SignInScreen", "Magic link sent to $email, starting polling")
+                                    }.onFailure { error ->
+                                        statusMessage = error.message ?: "Failed to send magic link"
+                                        isError = true
+                                        Log.e("SignInScreen", "Failed to send magic link: ${error.message}")
                                     }
-                                } else {
-                                    statusMessage = "Please enter your email address"
-                                    isError = true
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(28.dp),
-                                color = Color.White,
-                                strokeWidth = 3.dp
-                            )
-                        } else {
-                            Text(
-                                text = "Send Link",
-                                fontSize = 20.sp,
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                        }
-                    }
+                            } else {
+                                statusMessage = "Please enter your email address"
+                                isError = true
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading && email.isNotEmpty(),
+                        containerColor = Color(0xFF4A90E2),
+                        isLoading = isLoading
+                    )
                 }
+
+                // Development: Test Login Button (REMOVE IN PRODUCTION)
+                Spacer(modifier = Modifier.height(16.dp))
+                StandardButton(
+                    text = "TEST LOGIN (Dev Only)",
+                    onClick = {
+                        authManager.saveUserSession(
+                            email = "test@lucindadilworth.com",
+                            userId = "test_user_123",
+                            deviceId = deviceId
+                        )
+                        onSignInSuccess("test@lucindadilworth.com")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = Color(0xFFFF9800)
+                )
             } else {
                 // Polling state - waiting for user to click link
                 Column(
@@ -652,23 +700,15 @@ fun SignInScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    androidx.tv.material3.Button(
+                    StandardButton(
+                        text = "Cancel",
                         onClick = {
                             isPolling = false
                             statusMessage = null
                         },
-                        colors = androidx.tv.material3.ButtonDefaults.colors(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Text(
-                            text = "Cancel",
-                            fontSize = 20.sp,
-                            color = Color.White,
-                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 24.dp)
-                        )
-                    }
+                        containerColor = Color(0xFF2A2A2A),
+                        modifier = Modifier.width(200.dp)
+                    )
                 }
             }
         }
@@ -699,86 +739,65 @@ fun ProfileScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(600.dp)
-                .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
-                .padding(48.dp),
+                .width(550.dp)
+                .verticalScroll(rememberScrollState())
+                .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(12.dp))
+                .padding(40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Profile icon/header
+            // Profile icon/header - smaller
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(64.dp)
                     .background(Color(0xFF4A90E2), shape = androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = displayEmail.firstOrNull()?.uppercase() ?: "U",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = Color.White
+                    fontSize = 28.sp,
+                    color = Color.White,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
             }
 
+            // Email display - cleaner, no "Signed in as" label
             Text(
-                text = "Profile",
-                style = MaterialTheme.typography.headlineLarge,
+                text = displayEmail,
+                style = MaterialTheme.typography.titleLarge,
                 color = Color.White
             )
 
-            // Email display - prominent
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Signed in as",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.Gray
-                )
-                Text(
-                    text = displayEmail,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White
-                )
-            }
-
-            // Account status
+            // Account status - more subtle
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .background(Color(0xFF2A2A2A), shape = RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .size(8.dp)
                         .background(Color(0xFF4CAF50), shape = androidx.compose.foundation.shape.CircleShape)
                 )
                 Text(
                     text = "Active",
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 14.sp,
                     color = Color(0xFF4CAF50)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             if (!showSignOutConfirm) {
-                // Log Out button
-                androidx.compose.material3.Button(
+                // Log Out button - smaller, centered, subtle styling
+                StandardButton(
+                    text = "Log Out",
                     onClick = { showSignOutConfirm = true },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFF44336),
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Text(
-                        text = "Log Out",
-                        fontSize = 20.sp
-                    )
-                }
+                    containerColor = Color(0xFF2A2A2A),
+                    modifier = Modifier.width(200.dp)
+                )
             } else {
                 // Confirmation
                 Column(
@@ -797,24 +816,16 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        androidx.compose.material3.Button(
+                        StandardButton(
+                            text = "Cancel",
                             onClick = { showSignOutConfirm = false },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
+                            modifier = Modifier.weight(1f),
                             enabled = !isLoggingOut,
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF2A2A2A),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontSize = 20.sp
-                            )
-                        }
+                            containerColor = Color(0xFF2A2A2A)
+                        )
 
-                        androidx.compose.material3.Button(
+                        StandardButton(
+                            text = "Log Out",
                             onClick = {
                                 isLoggingOut = true
                                 scope.launch {
@@ -832,28 +843,11 @@ fun ProfileScreen(
                                     onSignOut()
                                 }
                             },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
+                            modifier = Modifier.weight(1f),
                             enabled = !isLoggingOut,
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFF44336),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            if (isLoggingOut) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text(
-                                    text = "Log Out",
-                                    fontSize = 20.sp
-                                )
-                            }
-                        }
+                            containerColor = Color(0xFFF44336),
+                            isLoading = isLoggingOut
+                        )
                     }
                 }
             }
@@ -958,9 +952,9 @@ fun SettingsScreen(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
@@ -976,27 +970,25 @@ fun SettingsScreen(
                         )
                     }
 
-                    androidx.tv.material3.Button(
-                        onClick = {
-                            isClearing = true
-                            onClearCache()
-                            cacheSize = 0L
-                            clearMessage = "✓ Cache cleared successfully"
-                            isClearing = false
-                        },
-                        modifier = Modifier.padding(start = 16.dp),
-                        enabled = !isClearing,
-                        scale = androidx.tv.material3.ButtonDefaults.scale(
-                            focusedScale = 1.15f
-                        ),
-                        colors = androidx.tv.material3.ButtonDefaults.colors(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White,
-                            focusedContainerColor = Color(0xFF4A90E2),
-                            focusedContentColor = Color.White
-                        )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 16.dp)
+                            .width(180.dp)
                     ) {
-                        Text(if (isClearing) "Clearing..." else "Clear Cache")
+                        StandardButton(
+                            text = if (isClearing) "Clearing..." else "Clear Cache",
+                            onClick = {
+                                isClearing = true
+                                onClearCache()
+                                cacheSize = 0L
+                                clearMessage = "✓ Cache cleared successfully"
+                                isClearing = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isClearing,
+                            containerColor = Color(0xFF2A2A2A),
+                            isLoading = isClearing
+                        )
                     }
                 }
 
@@ -1065,27 +1057,25 @@ fun SettingsScreen(
                         )
                     }
 
-                    androidx.tv.material3.Button(
-                        onClick = {
-                            isResettingKeystone = true
-                            warpShapeManager.resetWarpShape()
-                            keystoneMessage = "✓ Keystone reset to default"
-                            isResettingKeystone = false
-                            Log.d("SettingsScreen", "Keystone positions reset to default")
-                        },
-                        modifier = Modifier.padding(start = 16.dp),
-                        enabled = !isResettingKeystone,
-                        scale = androidx.tv.material3.ButtonDefaults.scale(
-                            focusedScale = 1.15f
-                        ),
-                        colors = androidx.tv.material3.ButtonDefaults.colors(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White,
-                            focusedContainerColor = Color(0xFF4A90E2),
-                            focusedContentColor = Color.White
-                        )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 16.dp)
+                            .width(200.dp)
                     ) {
-                        Text(if (isResettingKeystone) "Resetting..." else "Reset Keystone")
+                        StandardButton(
+                            text = if (isResettingKeystone) "Resetting..." else "Reset Keystone",
+                            onClick = {
+                                isResettingKeystone = true
+                                warpShapeManager.resetWarpShape()
+                                keystoneMessage = "✓ Keystone reset to default"
+                                isResettingKeystone = false
+                                Log.d("SettingsScreen", "Keystone positions reset to default")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isResettingKeystone,
+                            containerColor = Color(0xFF2A2A2A),
+                            isLoading = isResettingKeystone
+                        )
                     }
                 }
 
