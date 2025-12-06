@@ -1,6 +1,7 @@
 package com.dilworth.dilmap.data
 
 import android.util.Log
+import com.dilworth.dilmap.config.ApiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -8,7 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 
-class ContentRepository(private val baseUrl: String = "https://tv.dilly.cloud/content/") {
+class ContentRepository(private val baseUrl: String = ApiConfig.CONTENT_BASE_URL) {
 
     private val client = OkHttpClient.Builder()
         .build()
@@ -65,7 +66,7 @@ class ContentRepository(private val baseUrl: String = "https://tv.dilly.cloud/co
                     id = "demo-1",
                     title = "Demo Video",
                     description = "Sample keystone-corrected video playback",
-                    thumbnailUrl = "https://tv.dilly.cloud/content/demo-thumb.jpg",
+                    thumbnailUrl = "${ApiConfig.CONTENT_BASE_URL}demo-thumb.jpg",
                     videoUrl = "local://h-6.mp4", // Special URL for local files
                     _duration = 30,
                     category = "Demo"
@@ -75,7 +76,7 @@ class ContentRepository(private val baseUrl: String = "https://tv.dilly.cloud/co
                     title = "Mont Blanc Scene",
                     description = "Scenic footage from Mont Blanc",
                     thumbnailUrl = "asset://montblancscene4.jpg", // Use local asset
-                    videoUrl = "https://tv.dilly.cloud/content/montblanc.mp4",
+                    videoUrl = "${ApiConfig.CONTENT_BASE_URL}montblanc.mp4",
                     _duration = 60,
                     category = "Nature"
                 )

@@ -29,10 +29,16 @@ dil.map is an Android TV application that streams video content with real-time k
 
 ### 🏠 Home Screen
 - **Browse Content**: View video thumbnails organized by category
-- **Sign In**: User authentication interface
+- **Sign In**: Magic link authentication (passwordless, device-bound sign-in)
 - **Settings**: Cache management and keystone reset
 - **Help**: Built-in remote control guide
 - **About**: App version, license, and contact information
+
+### 🔐 Authentication
+- **Magic Link Sign In**: Passwordless authentication via email
+- **Device Binding**: Each TV device has a unique identifier
+- **Secure**: No passwords stored or transmitted
+- See [MAGIC_LINK_AUTH.md](MAGIC_LINK_AUTH.md) for implementation details
 
 ### 📺 Video Playback
 - Stream videos from `https://tv.dilly.cloud/content`

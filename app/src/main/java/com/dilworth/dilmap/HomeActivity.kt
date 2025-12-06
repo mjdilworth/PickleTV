@@ -106,17 +106,26 @@ fun HomeScreen(
     downloadManager: VideoDownloadManager,
     warpShapeManager: WarpShapeManager
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val authManager = remember { com.dilworth.dilmap.auth.AuthenticationManager.getInstance(context) }
     val scope = rememberCoroutineScope()
     var videos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     var downloadingVideoId by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
+    var isLoggedIn by remember { mutableStateOf(authManager.isLoggedIn()) }
+    var userEmail by remember { mutableStateOf(authManager.getUserEmail()) }
 
     // Create FocusRequesters for each tab to ensure proper focus restoration
     val tabFocusRequesters = remember { List(5) { FocusRequester() } }
 
-    val tabs = listOf("Browse Content", "Sign In", "Settings", "Help", "About")
+    // Dynamic tabs based on authentication status
+    val tabs = if (isLoggedIn) {
+        listOf("Browse Content", "Profile", "Settings", "Help", "About")
+    } else {
+        listOf("Browse Content", "Sign In", "Settings", "Help", "About")
+    }
 
     // Load content on first composition
     LaunchedEffect(Unit) {
@@ -188,15 +197,31 @@ fun HomeScreen(
                 )
             }
             selectedTab == 1 -> {
-                SignInScreen(
-                    onSignInSuccess = { username ->
-                        Log.d("HomeActivity", "Sign in successful: $username")
-                        selectedTab = 0 // Return to browse content
-                    },
-                    onCancel = {
-                        selectedTab = 0 // Return to browse content
-                    }
-                )
+                if (isLoggedIn) {
+                    // Show Profile screen when logged in
+                    ProfileScreen(
+                        authManager = authManager,
+                        userEmail = userEmail,
+                        onSignOut = {
+                            isLoggedIn = false
+                            userEmail = null
+                            selectedTab = 0 // Return to browse content
+                        }
+                    )
+                } else {
+                    // Show Sign In screen when not logged in
+                    SignInScreen(
+                        onSignInSuccess = { email ->
+                            Log.d("HomeActivity", "Sign in successful: $email")
+                            isLoggedIn = true
+                            userEmail = email
+                            selectedTab = 0 // Return to browse content
+                        },
+                        onCancel = {
+                            selectedTab = 0 // Return to browse content
+                        }
+                    )
+                }
             }
             selectedTab == 2 -> {
                 SettingsScreen(
@@ -397,8 +422,45 @@ fun SignInScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val magicLinkService = remember { com.dilworth.dilmap.auth.MagicLinkService.getInstance(context) }
+    val authManager = remember { com.dilworth.dilmap.auth.AuthenticationManager.getInstance(context) }
+
+    var email by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var isPolling by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+    val deviceId = remember { magicLinkService.getDeviceId() }
+
+    // Check if already logged in
+    LaunchedEffect(Unit) {
+        if (authManager.isLoggedIn()) {
+            authManager.getUserEmail()?.let { userEmail ->
+                onSignInSuccess(userEmail)
+            }
+        }
+    }
+
+    // Polling for authentication status
+    LaunchedEffect(isPolling) {
+        if (isPolling) {
+            while (isPolling) {
+                kotlinx.coroutines.delay(4000) // Poll every 4 seconds
+
+                val result = magicLinkService.checkAuthStatus(deviceId)
+                result.onSuccess { userInfo ->
+                    // User has clicked the magic link!
+                    authManager.saveUserSession(userInfo.email, userInfo.userId, userInfo.deviceId)
+                    isPolling = false
+                    onSignInSuccess(userInfo.email)
+                }.onFailure {
+                    // Keep polling - user hasn't clicked link yet
+                }
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -408,83 +470,385 @@ fun SignInScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(400.dp)
-                .background(Color(0xFF1A1A1A), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                .padding(32.dp),
+                .width(600.dp)
+                .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                .padding(48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(32.dp)
         ) {
             Text(
                 text = "Sign In",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 color = Color.White
             )
 
-            // Username field
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            if (!isPolling) {
                 Text(
-                    text = "Username",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    text = "Enter your email to receive a sign-in link",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Gray,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                androidx.compose.foundation.text.BasicTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF2A2A2A), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                        .padding(16.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
-                    singleLine = true
-                )
-            }
 
-            // Password field
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Password",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-                androidx.compose.foundation.text.BasicTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF2A2A2A), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                        .padding(16.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
-                    singleLine = true,
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                )
-            }
-
-            // Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Button(
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f)
+                // Email field only - no password!
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Cancel")
+                    Text(
+                        text = "Email Address",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White
+                    )
+                    BasicTextField(
+                        value = email,
+                        onValueChange = { email = it.trim() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF2A2A2A), shape = RoundedCornerShape(8.dp))
+                            .padding(20.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = 18.sp
+                        ),
+                        singleLine = true,
+                        enabled = !isLoading
+                    )
                 }
-                Button(
-                    onClick = {
-                        if (username.isNotEmpty() && password.isNotEmpty()) {
-                            onSignInSuccess(username)
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
+
+                // Status message
+                if (statusMessage != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = if (isError) Color(0xFFF44336) else Color(0xFF4CAF50),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = statusMessage!!,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                // Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Sign In")
+                    androidx.compose.material3.Button(
+                        onClick = onCancel,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        enabled = !isLoading,
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2A2A2A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            fontSize = 20.sp
+                        )
+                    }
+                    androidx.compose.material3.Button(
+                        onClick = {
+                            if (email.isNotEmpty()) {
+                                isLoading = true
+                                scope.launch {
+                                    val result = magicLinkService.requestMagicLink(email)
+                                    isLoading = false
+
+                                    result.onSuccess { message ->
+                                        statusMessage = null
+                                        isError = false
+                                        isPolling = true // Start polling
+                                        Log.d("SignInScreen", "Magic link sent to $email, starting polling")
+                                    }.onFailure { error ->
+                                        statusMessage = error.message ?: "Failed to send magic link"
+                                        isError = true
+                                        Log.e("SignInScreen", "Failed to send magic link: ${error.message}")
+                                    }
+                                }
+                            } else {
+                                statusMessage = "Please enter your email address"
+                                isError = true
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        enabled = !isLoading && email.isNotEmpty(),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4A90E2),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                text = "Send Link",
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Polling state - waiting for user to click link
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        color = Color(0xFF4A90E2),
+                        strokeWidth = 4.dp
+                    )
+
+                    Text(
+                        text = "Check Your Email",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White
+                    )
+
+                    Text(
+                        text = "We sent a sign-in link to:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.Gray
+                    )
+
+                    Text(
+                        text = email,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color(0xFF4A90E2)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Click the link in your email to sign in.\nWaiting for confirmation...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.Gray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    androidx.tv.material3.Button(
+                        onClick = {
+                            isPolling = false
+                            statusMessage = null
+                        },
+                        colors = androidx.tv.material3.ButtonDefaults.colors(
+                            containerColor = Color(0xFF2A2A2A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 24.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+fun ProfileScreen(
+    authManager: com.dilworth.dilmap.auth.AuthenticationManager,
+    userEmail: String?,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val magicLinkService = remember { com.dilworth.dilmap.auth.MagicLinkService.getInstance(context) }
+    val displayEmail = userEmail ?: authManager.getUserEmail() ?: "No email"
+    val deviceId = remember { magicLinkService.getDeviceId() }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+    var isLoggingOut by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(48.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(600.dp)
+                .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                .padding(48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            // Profile icon/header
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .background(Color(0xFF4A90E2), shape = androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = displayEmail.firstOrNull()?.uppercase() ?: "U",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = Color.White
+                )
+            }
+
+            Text(
+                text = "Profile",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White
+            )
+
+            // Email display - prominent
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Signed in as",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.Gray
+                )
+                Text(
+                    text = displayEmail,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White
+                )
+            }
+
+            // Account status
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(Color(0xFF4CAF50), shape = androidx.compose.foundation.shape.CircleShape)
+                )
+                Text(
+                    text = "Active",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0xFF4CAF50)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (!showSignOutConfirm) {
+                // Log Out button
+                androidx.compose.material3.Button(
+                    onClick = { showSignOutConfirm = true },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF44336),
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
+                    Text(
+                        text = "Log Out",
+                        fontSize = 20.sp
+                    )
+                }
+            } else {
+                // Confirmation
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Are you sure you want to log out?",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        androidx.compose.material3.Button(
+                            onClick = { showSignOutConfirm = false },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            enabled = !isLoggingOut,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2A2A2A),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                text = "Cancel",
+                                fontSize = 20.sp
+                            )
+                        }
+
+                        androidx.compose.material3.Button(
+                            onClick = {
+                                isLoggingOut = true
+                                scope.launch {
+                                    // Call logout API
+                                    val result = magicLinkService.logout(deviceId)
+                                    result.onSuccess {
+                                        Log.d("ProfileScreen", "Logout API successful")
+                                    }.onFailure {
+                                        Log.e("ProfileScreen", "Logout API failed: ${it.message}")
+                                    }
+
+                                    // Clear local session regardless of API result
+                                    authManager.signOut()
+                                    isLoggingOut = false
+                                    onSignOut()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            enabled = !isLoggingOut,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFF44336),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            if (isLoggingOut) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = "Log Out",
+                                    fontSize = 20.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
