@@ -27,17 +27,29 @@ class AuthenticationManager(context: Context) {
     }
 
     /**
-     * Check if user is currently logged in
+     * Check if user is currently logged in with valid credentials
      */
     fun isLoggedIn(): Boolean {
-        return prefs.getBoolean(KEY_IS_LOGGED_IN, false)
+        val isLogged = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
+        val email = prefs.getString(KEY_EMAIL, null)
+
+        // Validate that we have a real email, not the string "null"
+        if (isLogged && (email == null || email == "null" || email.isBlank())) {
+            // Corrupted data - clear it
+            signOut()
+            return false
+        }
+
+        return isLogged
     }
 
     /**
      * Get logged in user's email
      */
     fun getUserEmail(): String? {
-        return prefs.getString(KEY_EMAIL, null)
+        val email = prefs.getString(KEY_EMAIL, null)
+        // Return null if email is the string "null" or blank
+        return if (email == "null" || email.isNullOrBlank()) null else email
     }
 
     /**

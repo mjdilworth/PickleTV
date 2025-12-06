@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -542,65 +543,70 @@ fun SignInScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    androidx.compose.material3.Button(
-                        onClick = onCancel,
+                    Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(56.dp),
-                        enabled = !isLoading,
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2A2A2A),
-                            contentColor = Color.White
-                        )
+                            .height(60.dp)
+                            .background(
+                                color = if (isLoading) Color(0xFF1A1A1A) else Color(0xFF2A2A2A),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable(enabled = !isLoading) { onCancel() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "Cancel",
-                            fontSize = 20.sp
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge
                         )
                     }
-                    androidx.compose.material3.Button(
-                        onClick = {
-                            if (email.isNotEmpty()) {
-                                isLoading = true
-                                scope.launch {
-                                    val result = magicLinkService.requestMagicLink(email)
-                                    isLoading = false
 
-                                    result.onSuccess { message ->
-                                        statusMessage = null
-                                        isError = false
-                                        isPolling = true // Start polling
-                                        Log.d("SignInScreen", "Magic link sent to $email, starting polling")
-                                    }.onFailure { error ->
-                                        statusMessage = error.message ?: "Failed to send magic link"
-                                        isError = true
-                                        Log.e("SignInScreen", "Failed to send magic link: ${error.message}")
-                                    }
-                                }
-                            } else {
-                                statusMessage = "Please enter your email address"
-                                isError = true
-                            }
-                        },
+                    Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(56.dp),
-                        enabled = !isLoading && email.isNotEmpty(),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4A90E2),
-                            contentColor = Color.White
-                        )
+                            .height(60.dp)
+                            .background(
+                                color = if (!isLoading && email.isNotEmpty()) Color(0xFF4A90E2) else Color(0xFF2A5A82),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable(enabled = !isLoading && email.isNotEmpty()) {
+                                if (email.isNotEmpty()) {
+                                    isLoading = true
+                                    scope.launch {
+                                        val result = magicLinkService.requestMagicLink(email)
+                                        isLoading = false
+
+                                        result.onSuccess { message ->
+                                            statusMessage = null
+                                            isError = false
+                                            isPolling = true // Start polling
+                                            Log.d("SignInScreen", "Magic link sent to $email, starting polling")
+                                        }.onFailure { error ->
+                                            statusMessage = error.message ?: "Failed to send magic link"
+                                            isError = true
+                                            Log.e("SignInScreen", "Failed to send magic link: ${error.message}")
+                                        }
+                                    }
+                                } else {
+                                    statusMessage = "Please enter your email address"
+                                    isError = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(28.dp),
                                 color = Color.White,
-                                strokeWidth = 2.dp
+                                strokeWidth = 3.dp
                             )
                         } else {
                             Text(
                                 text = "Send Link",
-                                fontSize = 20.sp
+                                fontSize = 20.sp,
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleLarge
                             )
                         }
                     }
