@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.TextStyle
@@ -109,6 +113,9 @@ fun HomeScreen(
     var downloadingVideoId by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
 
+    // Create FocusRequesters for each tab to ensure proper focus restoration
+    val tabFocusRequesters = remember { List(5) { FocusRequester() } }
+
     val tabs = listOf("Browse Content", "Sign In", "Settings", "Help", "About")
 
     // Load content on first composition
@@ -135,7 +142,8 @@ fun HomeScreen(
             selectedTab = selectedTab,
             onTabSelected = { index ->
                 selectedTab = index
-            }
+            },
+            focusRequesters = tabFocusRequesters
         )
 
         // Main content area - changes based on selected tab
@@ -218,14 +226,25 @@ fun TopNavigationBar(
     tabs: List<String>,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
+    focusRequesters: List<FocusRequester>,
     modifier: Modifier = Modifier
 ) {
+    // Track the last key event to distinguish horizontal vs vertical navigation
+    var lastKeyCode by remember { mutableStateOf<Int?>(null) }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
             .background(Color(0xFF0A0A0A))
-            .padding(horizontal = 48.dp),
+            .padding(horizontal = 48.dp)
+            .onPreviewKeyEvent { keyEvent ->
+                // Track key presses to detect navigation direction
+                if (keyEvent.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                    lastKeyCode = keyEvent.nativeKeyEvent.keyCode
+                }
+                false // Don't consume the event
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -247,10 +266,20 @@ fun TopNavigationBar(
                 Tab(
                     selected = selectedTab == index,
                     onFocus = {
-                        // Select tab on focus for better TV navigation
-                        onTabSelected(index)
+                        if (index == selectedTab) {
+                            // Same tab getting focus - already selected, do nothing
+                        } else if (lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT ||
+                                   lastKeyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+                            // Horizontal navigation (LEFT/RIGHT keys) - change tab
+                            onTabSelected(index)
+                        } else {
+                            // Vertical navigation (UP from content) - restore focus to correct tab
+                            focusRequesters[selectedTab].requestFocus()
+                        }
+                        lastKeyCode = null // Reset after handling
                     },
-                    onClick = { onTabSelected(index) }
+                    onClick = { onTabSelected(index) },
+                    modifier = Modifier.focusRequester(focusRequesters[index])
                 ) {
                     Text(
                         text = title,
@@ -496,14 +525,16 @@ fun SettingsScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         TvLazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
+            contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Settings header and info
             item {
                 Column(
                     modifier = Modifier
@@ -534,23 +565,32 @@ fun SettingsScreen(
 
                     Text(
                         text = "• Content Server: tv.dilly.cloud",
-                        style = MaterialTheme.typography.bodyMedium, // Changed from bodyLarge
+                        style = MaterialTheme.typography.bodyMedium,
                         color = Color.White
                     )
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(8.dp)) // Reduced from 16.dp
-
-                    // Cache management section
+            // Cache management section
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(600.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "Storage Management",
-                        style = MaterialTheme.typography.titleMedium, // Changed from titleLarge
+                        style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp) // Reduced padding
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
@@ -566,7 +606,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    Button(
+                    androidx.tv.material3.Button(
                         onClick = {
                             isClearing = true
                             onClearCache()
@@ -575,7 +615,16 @@ fun SettingsScreen(
                             isClearing = false
                         },
                         modifier = Modifier.padding(start = 16.dp),
-                        enabled = !isClearing
+                        enabled = !isClearing,
+                        scale = androidx.tv.material3.ButtonDefaults.scale(
+                            focusedScale = 1.15f
+                        ),
+                        colors = androidx.tv.material3.ButtonDefaults.colors(
+                            containerColor = Color(0xFF2A2A2A),
+                            contentColor = Color.White,
+                            focusedContainerColor = Color(0xFF4A90E2),
+                            focusedContentColor = Color.White
+                        )
                     ) {
                         Text(if (isClearing) "Clearing..." else "Clear Cache")
                     }
@@ -596,7 +645,7 @@ fun SettingsScreen(
                             .background(
                                 color = if (clearMessage!!.startsWith("✓"))
                                     Color(0xFF4CAF50) else Color(0xFFF44336),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(4.dp)
                             )
                             .padding(12.dp),
                         contentAlignment = Alignment.Center
@@ -608,22 +657,31 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+            }
 
-                Spacer(modifier = Modifier.height(8.dp)) // Reduced from 16.dp
-
-                // Keystone Correction Reset section
-                Text(
-                    text = "Keystone Correction",
-                    style = MaterialTheme.typography.titleMedium, // Changed from titleLarge
-                    color = Color.White,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp) // Reduced padding
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // Keystone Correction Reset section
+            item {
+                Column(
+                    modifier = Modifier
+                        .width(600.dp)
+                        .background(Color(0xFF1A1A1A), shape = RoundedCornerShape(8.dp))
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Text(
+                        text = "Keystone Correction",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Reset Keystone Position",
@@ -637,7 +695,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    Button(
+                    androidx.tv.material3.Button(
                         onClick = {
                             isResettingKeystone = true
                             warpShapeManager.resetWarpShape()
@@ -646,7 +704,16 @@ fun SettingsScreen(
                             Log.d("SettingsScreen", "Keystone positions reset to default")
                         },
                         modifier = Modifier.padding(start = 16.dp),
-                        enabled = !isResettingKeystone
+                        enabled = !isResettingKeystone,
+                        scale = androidx.tv.material3.ButtonDefaults.scale(
+                            focusedScale = 1.15f
+                        ),
+                        colors = androidx.tv.material3.ButtonDefaults.colors(
+                            containerColor = Color(0xFF2A2A2A),
+                            contentColor = Color.White,
+                            focusedContainerColor = Color(0xFF4A90E2),
+                            focusedContentColor = Color.White
+                        )
                     ) {
                         Text(if (isResettingKeystone) "Resetting..." else "Reset Keystone")
                     }
@@ -660,7 +727,7 @@ fun SettingsScreen(
                             .background(
                                 color = if (keystoneMessage!!.startsWith("✓"))
                                     Color(0xFF4CAF50) else Color(0xFFF44336),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(4.dp)
                             )
                             .padding(12.dp),
                         contentAlignment = Alignment.Center
@@ -672,28 +739,8 @@ fun SettingsScreen(
                         )
                     }
                 }
+                }
             }
-            }
-        }
-
-        // Scroll indicator stays pinned to bottom
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
-                    )
-                )
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "⬇ Scroll down for more options",
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
@@ -829,7 +876,7 @@ fun HelpScreen(modifier: Modifier = Modifier) {
                         WorkflowStep("3", "Navigate to a corner → Press Center")
                         WorkflowStep("4", "Use D-Pad arrows → Adjust corner")
                         WorkflowStep("5", "Press D-Pad Center → Back to menu")
-                        WorkflowStep("6", "Select 'Save Keystone' → Press Center")
+                        WorkflowStep("6", "Select 'Save & Exit' → Press Center")
                     }
                 }
             }
@@ -1062,6 +1109,26 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
+        }
+
+        // Scroll indicator at bottom
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                    )
+                )
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "⬇ Scroll down for more information",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

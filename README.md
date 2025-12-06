@@ -86,8 +86,8 @@ The app uses **standard Android TV key codes** and works with:
 
 **Menu Options:**
 - **Corner 1-4** → Enter adjustment mode for that corner
-- **Save Keystone** → Save current settings
-- **Exit Keystone** → Close menu
+- **Reset to Default** → Reset all corners to center position
+- **Save & Exit** → Save current settings and close menu
 
 **Adjusting Corners:**
 1. Select a corner from menu → Enters adjustment mode
@@ -102,8 +102,7 @@ The app uses **standard Android TV key codes** and works with:
 3. Navigate to "Corner 1 (Top Left)" → Press Center to select
 4. Use D-Pad arrows → Adjust corner position
 5. Press D-Pad Center → Return to menu
-6. Navigate to "Save Keystone" → Press Center to save
-7. Navigate to "Exit Keystone" → Press Center to close
+6. Navigate to "Save & Exit" → Press Center to save and close
 ```
 
 **Notes**: 

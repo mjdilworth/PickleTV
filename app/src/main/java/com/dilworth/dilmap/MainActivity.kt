@@ -41,10 +41,10 @@ class MainActivity : ComponentActivity() {
     private val menuOptions = listOf(
         "Corner 1 (Top Left)",
         "Corner 2 (Top Right)",
-        "Corner 3 (Bottom Right)",
-        "Corner 4 (Bottom Left)",
-        "Save Keystone",
-        "Exit Keystone"
+        "Corner 3 (Bottom Left)",
+        "Corner 4 (Bottom Right)",
+        "Reset to Default",
+        "Save & Exit"
     )
 
     // Adjustment settings
@@ -189,15 +189,18 @@ class MainActivity : ComponentActivity() {
                 ).show()
                 Log.d("MainActivity", "Selected corner: $selectedCorner")
             }
-            4 -> { // Save Keystone
-                warpShapeManager.saveWarpShape(currentWarpShape)
-                Toast.makeText(this, "✓ Keystone position saved", Toast.LENGTH_SHORT).show()
-                hideKeystoneMenu()
-                Log.d("MainActivity", "Keystone saved")
+            4 -> { // Reset to Default
+                currentWarpShape = WarpShape()
+                renderer.setWarpShape(currentWarpShape)
+                glSurfaceView.requestRender()
+                Toast.makeText(this, "✓ Keystone reset to default", Toast.LENGTH_SHORT).show()
+                Log.d("MainActivity", "Keystone reset to default")
             }
-            5 -> { // Exit Keystone
+            5 -> { // Save & Exit
+                warpShapeManager.saveWarpShape(currentWarpShape)
+                Toast.makeText(this, "✓ Keystone saved", Toast.LENGTH_SHORT).show()
                 hideKeystoneMenu()
-                Toast.makeText(this, "Keystone adjustment closed", Toast.LENGTH_SHORT).show()
+                Log.d("MainActivity", "Keystone saved and exited")
             }
         }
     }
