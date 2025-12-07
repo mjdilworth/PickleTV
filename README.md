@@ -38,7 +38,22 @@ dil.map is an Android TV application that streams video content with real-time k
 - **Magic Link Sign In**: Passwordless authentication via email
 - **Device Binding**: Each TV device has a unique identifier
 - **Secure**: No passwords stored or transmitted
+- **Session Persistence**: Stays logged in until explicit logout
+- **Email Verification**: User must click link in email before authentication completes
+- **Auto Validation**: Corrupted auth data is automatically cleared
 - See [MAGIC_LINK_AUTH.md](MAGIC_LINK_AUTH.md) for implementation details
+
+#### Sign-In Flow
+1. Navigate to **Sign In** tab
+2. Enter email address
+3. Click **"Send Link"** button
+4. **"Check Your Email"** screen appears with polling indicator
+5. Check email and click the magic link
+6. App automatically detects successful authentication (polls every 4 seconds)
+7. Tab changes from "Sign In" to **"Profile"** with your email displayed
+8. Returns to Browse Content tab
+
+**Note**: The Profile tab only appears AFTER you click the magic link in your email. If you see "Profile" with null/no email, this indicates corrupted cache data - use "Log Out" or clear app data to fix.
 
 ### 📺 Video Playback
 - Stream videos from `https://tv.dilly.cloud/content`
@@ -253,10 +268,50 @@ Example manifest format:
 
 ## 🐛 Troubleshooting
 
+### Authentication Issues
+
+**Problem: Profile tab shows "null" email or appears before clicking magic link**
+
+**Cause**: This indicates corrupted authentication cache data from a previous session.
+
+**Solutions**:
+1. **From Profile tab**: Click "Log Out" button (safest method)
+2. **From Settings**: Android Settings → Apps → dil.map → Clear Data
+3. **From ADB**: `adb shell pm clear com.dilworth.dilmap`
+
+**Prevention**: The app automatically validates and clears corrupted auth data on startup. If you see this issue:
+- Sign out and sign in again
+- The second sign-in should work correctly
+- This is a one-time cleanup of old cached data
+
+**Expected Behavior for Existing Users on New Devices**:
+1. Enter email → Click "Send Link"
+2. "Check Your Email" screen appears
+3. App polls `GET /auth/status?deviceId={deviceId}` every 4 seconds
+4. Server returns: `{"authenticated": false, "email": null, "userId": null}` 
+5. App continues polling (does not show Profile)
+6. User clicks magic link in email
+7. Server returns: `{"authenticated": true, "email": "user@example.com", "userId": "..."}`
+8. **THEN** Profile tab appears with real email
+
+**Server Response Format**:
+- Before link click: `authenticated: false` with null values
+- After link click: `authenticated: true` with real email and userId
+- App only treats response as successful when `authenticated: true` AND email/userId are valid
+
 ### Video Not Playing
 - Check network connection (videos stream from tv.dilly.cloud)
 - View download progress indicator if video is caching
 - Check logcat for network errors: `adb logcat | grep "ContentRepository\|VideoDownload"`
+
+**Black Screen on TV (but works on emulator):**
+- **Most common cause**: Video codec not supported by TV hardware (H.265/HEVC)
+- **Automatic fallback**: App now automatically retries with software decoder if hardware fails
+- **Performance note**: Software decoder uses more CPU but supports more codecs
+- **Quick fix**: Re-encode video to H.264 with baseline profile for best compatibility
+- **See**: [TROUBLESHOOTING_BLACK_SCREEN.md](TROUBLESHOOTING_BLACK_SCREEN.md) for detailed diagnostics
+- **Debug commands**: [TV_DEBUG_COMMANDS.md](TV_DEBUG_COMMANDS.md) for ADB debugging on TV
+- **Enhanced logging**: App now logs video codec, resolution, device info, and playback errors
 
 ### Keystone Adjustment Not Working
 - **Enable corner edit mode first**: Press Volume Up (or V key)

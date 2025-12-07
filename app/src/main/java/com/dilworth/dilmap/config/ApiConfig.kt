@@ -34,6 +34,29 @@ object ApiConfig {
         const val LOGOUT = "$API_BASE_URL/auth/logout"
     }
 
+    object Content {
+        const val USER_CONTENT = "${CONTENT_BASE_URL}user"
+
+        /**
+         * Get user content URL
+         * @param userId User's unique ID
+         * @return URL for user's content manifest
+         */
+        fun getUserContentUrl(userId: String): String {
+            return "$USER_CONTENT?userId=$userId"
+        }
+
+        /**
+         * Get user file URL
+         * @param userId User's unique ID
+         * @param filename Name of the file
+         * @return URL for user's specific file
+         */
+        fun getUserFileUrl(userId: String, filename: String): String {
+            return "${CONTENT_BASE_URL}user/$userId/$filename"
+        }
+    }
+
     // Timeouts (in seconds)
     object Timeouts {
         const val CONNECT_TIMEOUT = 30L

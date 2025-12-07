@@ -172,12 +172,20 @@ fun HomeScreen(
     val authManager = remember { com.dilworth.dilmap.auth.AuthenticationManager.getInstance(context) }
     val scope = rememberCoroutineScope()
     var videos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    var userVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    var generalVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     var downloadingVideoId by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableStateOf<DownloadProgress?>(null) }
-    var isLoggedIn by remember { mutableStateOf(authManager.isLoggedIn()) }
-    var userEmail by remember { mutableStateOf(authManager.getUserEmail()) }
+
+    // Initialize authentication state safely
+    // Check isLoggedIn first (which validates and clears corrupted data)
+    // Then get email - if email is null after isLoggedIn is true, something is wrong
+    val initialLoggedIn = authManager.isLoggedIn()
+    val initialEmail = authManager.getUserEmail()
+    var isLoggedIn by remember { mutableStateOf(initialLoggedIn && initialEmail != null) }
+    var userEmail by remember { mutableStateOf(initialEmail) }
 
     // Create FocusRequesters for each tab to ensure proper focus restoration
     val tabFocusRequesters = remember { List(5) { FocusRequester() } }
@@ -189,16 +197,36 @@ fun HomeScreen(
         listOf("Browse Content", "Sign In", "Settings", "Help", "About")
     }
 
-    // Load content on first composition
-    LaunchedEffect(Unit) {
+    // Load content on first composition and when login status changes
+    LaunchedEffect(isLoggedIn) {
+        isLoading = true
         scope.launch {
-            val result = ContentRepository.getInstance().fetchContentManifest()
-            result.onSuccess { manifest ->
-                videos = manifest.videos
-                isLoading = false
-            }.onFailure {
-                isLoading = false
+            val repository = ContentRepository.getInstance()
+
+            // Fetch general content
+            val generalResult = repository.fetchContentManifest()
+            generalResult.onSuccess { manifest ->
+                generalVideos = manifest.videos
             }
+
+            // Fetch user content if logged in
+            if (isLoggedIn) {
+                val userId = authManager.getUserId()
+                if (userId != null) {
+                    val userResult = repository.fetchUserContent(userId)
+                    userResult.onSuccess { userManifest ->
+                        userVideos = userManifest.videos
+                        Log.d("HomeScreen", "Loaded ${userVideos.size} user videos")
+                    }
+                }
+            } else {
+                userVideos = emptyList()
+            }
+
+            // Combine: user content first, then general content
+            videos = userVideos + generalVideos
+            isLoading = false
+            Log.d("HomeScreen", "Total videos: ${videos.size} (${userVideos.size} user + ${generalVideos.size} general)")
         }
     }
 
@@ -236,11 +264,14 @@ fun HomeScreen(
                         // Start download if not cached
                         if (!downloadManager.isVideoCached(videoItem.videoUrl)) {
                             downloadingVideoId = videoItem.id
+                            Log.d("HomeActivity", "Starting download for video: ${videoItem.id}")
                             scope.launch {
                                 downloadManager.downloadVideo(videoItem.id, videoItem.videoUrl)
                                     .collectLatest { progress ->
+                                        Log.d("HomeActivity", "Download progress: ${progress.percentage}% (${progress.bytesDownloaded}/${progress.totalBytes})")
                                         downloadProgress = progress
                                         if (progress.isComplete) {
+                                            Log.d("HomeActivity", "Download complete for video: ${videoItem.id}")
                                             // Play video after download
                                             onVideoSelected(videoItem)
                                             downloadingVideoId = null
@@ -249,13 +280,15 @@ fun HomeScreen(
                                     }
                             }
                         } else {
+                            Log.d("HomeActivity", "Video already cached: ${videoItem.id}")
                             // Play immediately if cached
                             onVideoSelected(videoItem)
                         }
                     },
                     downloadManager = downloadManager,
                     downloadingVideoId = downloadingVideoId,
-                    downloadProgress = downloadProgress
+                    downloadProgress = downloadProgress,
+                    userContentCount = userVideos.size
                 )
             }
             selectedTab == 1 -> {
@@ -388,7 +421,8 @@ fun ContentBrowserScreen(
     downloadManager: VideoDownloadManager,
     downloadingVideoId: String?,
     downloadProgress: DownloadProgress?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userContentCount: Int = 0
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         // Download progress indicator
@@ -441,10 +475,53 @@ fun ContentBrowserScreen(
                 .padding(top = 24.dp),
             contentPadding = PaddingValues(bottom = 48.dp)
         ) {
-            // Group videos by category
-            val categorizedVideos = videos.groupBy { it.category }
+            // Split videos into user content and general content
+            val userVideos = if (userContentCount > 0) videos.take(userContentCount) else emptyList()
+            val generalVideos = if (userContentCount > 0) videos.drop(userContentCount) else videos
 
-            categorizedVideos.forEach { (category, categoryVideos) ->
+            // Show "My Content" section if user has content
+            if (userVideos.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "My Content",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 48.dp, vertical = 16.dp)
+                    )
+                }
+
+                // Show all user videos together without category subdivision
+                item {
+                    CategorySection(
+                        title = "", // No category title, we already have "My Content" header
+                        videos = userVideos,
+                        onVideoClick = onVideoSelected,
+                        downloadManager = downloadManager,
+                        downloadingVideoId = downloadingVideoId
+                    )
+                }
+
+                // Separator
+                item {
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            }
+
+            // Show "Browse All" section header if user has their own content
+            if (userVideos.isNotEmpty() && generalVideos.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Browse All",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 48.dp, vertical = 16.dp)
+                    )
+                }
+            }
+
+            // General content
+            val generalCategorizedVideos = generalVideos.groupBy { it.category }
+            generalCategorizedVideos.forEach { (category, categoryVideos) ->
                 item {
                     CategorySection(
                         title = category,
@@ -496,31 +573,37 @@ fun SignInScreen(
     var isError by remember { mutableStateOf(false) }
     val deviceId = remember { magicLinkService.getDeviceId() }
 
-    // Check if already logged in
-    LaunchedEffect(Unit) {
-        if (authManager.isLoggedIn()) {
-            authManager.getUserEmail()?.let { userEmail ->
-                onSignInSuccess(userEmail)
-            }
-        }
-    }
 
     // Polling for authentication status
     LaunchedEffect(isPolling) {
         if (isPolling) {
+            Log.d("SignInScreen", "Starting polling for deviceId: $deviceId")
+            var pollCount = 0
             while (isPolling) {
                 kotlinx.coroutines.delay(4000) // Poll every 4 seconds
+                pollCount++
 
+                Log.d("SignInScreen", "Poll attempt #$pollCount for authentication status")
                 val result = magicLinkService.checkAuthStatus(deviceId)
                 result.onSuccess { userInfo ->
-                    // User has clicked the magic link!
+                    // Validate that we have a real email before proceeding
+                    if (userInfo.email.isNullOrBlank() || userInfo.email == "null") {
+                        Log.w("SignInScreen", "Poll #$pollCount: Server returned invalid/null email - continuing to poll")
+                        // Don't stop polling - this is a server-side bug, keep waiting for valid auth
+                        return@onSuccess
+                    }
+
+                    // User has clicked the magic link and server returned valid email!
+                    Log.d("SignInScreen", "✓ Authentication successful! User: ${userInfo.email}, Poll #$pollCount")
                     authManager.saveUserSession(userInfo.email, userInfo.userId, userInfo.deviceId)
                     isPolling = false
                     onSignInSuccess(userInfo.email)
-                }.onFailure {
+                }.onFailure { error ->
                     // Keep polling - user hasn't clicked link yet
+                    Log.d("SignInScreen", "Poll #$pollCount: Not authenticated yet (expected)")
                 }
             }
+            Log.d("SignInScreen", "Polling stopped after $pollCount attempts")
         }
     }
 

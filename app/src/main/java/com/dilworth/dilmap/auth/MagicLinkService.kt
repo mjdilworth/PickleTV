@@ -112,15 +112,32 @@ class MagicLinkService(private val context: Context) {
 
                 if (response.isSuccessful) {
                     val json = JSONObject(responseBody)
+                    val authenticated = json.optBoolean("authenticated", false)
+
+                    // First check if authenticated field is true
+                    if (!authenticated) {
+                        Log.d(TAG, "Device not authenticated yet (authenticated=false)")
+                        return@withContext Result.failure(Exception("Not authenticated yet"))
+                    }
+
+                    // Now validate the email and userId fields
+                    val email = json.optString("email", "")
+                    val userId = json.optString("userId", "")
+
+                    if (email.isBlank() || email == "null" || userId.isBlank() || userId == "null") {
+                        Log.w(TAG, "Server says authenticated but returned invalid data: email='$email', userId='$userId'")
+                        return@withContext Result.failure(Exception("Invalid authentication data from server"))
+                    }
+
                     val userInfo = UserInfo(
-                        email = json.getString("email"),
-                        userId = json.getString("userId"),
+                        email = email,
+                        userId = userId,
                         deviceId = deviceId
                     )
                     Log.d(TAG, "Authentication confirmed for ${userInfo.email}")
                     Result.success(userInfo)
                 } else {
-                    // Not authenticated yet - this is normal during polling
+                    // HTTP error - this is normal during polling
                     Result.failure(Exception("Not authenticated yet"))
                 }
             }

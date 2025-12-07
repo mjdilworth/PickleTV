@@ -72,6 +72,8 @@ class VideoDownloadManager(private val context: Context) {
 
                 val totalBytes = response.body?.contentLength() ?: -1
                 var downloadedBytes = 0L
+                var lastEmittedBytes = 0L
+                val emitThreshold = 102400L // Emit every 100KB
 
                 response.body?.byteStream()?.use { input ->
                     FileOutputStream(cachedFile).use { output ->
@@ -82,15 +84,33 @@ class VideoDownloadManager(private val context: Context) {
                             output.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
 
-                            // Emit progress every 100KB
-                            if (downloadedBytes % 102400 == 0L) {
+                            // Emit progress every 100KB or more
+                            if (downloadedBytes - lastEmittedBytes >= emitThreshold) {
                                 emit(DownloadProgress(videoId, downloadedBytes, totalBytes, false))
+                                lastEmittedBytes = downloadedBytes
                             }
                         }
 
                         // Final progress
                         emit(DownloadProgress(videoId, downloadedBytes, totalBytes, true))
-                        Log.d(TAG, "Download complete: $videoUrl -> ${cachedFile.absolutePath}")
+
+                        // Detailed completion logging
+                        Log.d(TAG, "Download complete: $videoUrl")
+                        Log.d(TAG, "  File path: ${cachedFile.absolutePath}")
+                        Log.d(TAG, "  File size: ${formatSize(cachedFile.length())} ($downloadedBytes bytes)")
+                        Log.d(TAG, "  Expected size: ${formatSize(totalBytes)} ($totalBytes bytes)")
+                        Log.d(TAG, "  Size match: ${downloadedBytes == totalBytes}")
+
+                        // Validate file
+                        if (!cachedFile.exists()) {
+                            Log.e(TAG, "ERROR: Downloaded file does not exist!")
+                        } else if (cachedFile.length() == 0L) {
+                            Log.e(TAG, "ERROR: Downloaded file is empty!")
+                        } else if (totalBytes > 0 && downloadedBytes != totalBytes) {
+                            Log.w(TAG, "WARNING: File size mismatch - may be corrupted")
+                        } else {
+                            Log.d(TAG, "✓ File validation passed")
+                        }
                     }
                 }
             }

@@ -205,8 +205,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var playbackAttempts = 0
+    private var currentVideoUrl: String? = null
+    private var currentSurface: Surface? = null
+
     private fun initializeExoPlayer() {
-        exoPlayer = ExoPlayer.Builder(this).build()
+        // Start with hardware decoding preference (default)
+        // Software fallback will be triggered on error
+        exoPlayer = createExoPlayerWithDecoder(preferSoftwareDecoder = false)
         exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
 
         // Register surface texture callback to provide Surface to ExoPlayer
@@ -216,6 +222,43 @@ class MainActivity : ComponentActivity() {
 
         // Update warp shape in renderer
         renderer.setWarpShape(currentWarpShape)
+    }
+
+    private fun createExoPlayerWithDecoder(preferSoftwareDecoder: Boolean): ExoPlayer {
+        val renderersFactory = com.google.android.exoplayer2.DefaultRenderersFactory(this).apply {
+            if (preferSoftwareDecoder) {
+                // Force software decoding by using a custom MediaCodecSelector
+                // that filters out hardware codecs
+                setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+                    val allCodecs = com.google.android.exoplayer2.mediacodec.MediaCodecUtil
+                        .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+
+                    // Filter to only software decoders (names starting with "OMX.google." or "c2.android.")
+                    val softwareCodecs = allCodecs.filter { codecInfo ->
+                        val name = codecInfo.name.lowercase()
+                        name.startsWith("omx.google.") ||
+                        name.startsWith("c2.android.") ||
+                        name.contains("sw")  // Software decoder indicator
+                    }
+
+                    if (softwareCodecs.isNotEmpty()) {
+                        Log.d("MainActivity", "Using software decoder: ${softwareCodecs[0].name}")
+                        softwareCodecs
+                    } else {
+                        Log.w("MainActivity", "No software decoders found, using default")
+                        allCodecs
+                    }
+                }
+                Log.d("MainActivity", "Creating ExoPlayer with SOFTWARE decoder (forced via MediaCodecSelector)")
+            } else {
+                // Use default hardware decoder preference
+                Log.d("MainActivity", "Creating ExoPlayer with HARDWARE decoder preference (default)")
+            }
+        }
+
+        return ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
+            .build()
     }
 
     private fun setupExoPlayerWithSurface(surface: Surface) {
@@ -256,20 +299,190 @@ class MainActivity : ComponentActivity() {
             val videoFile = File(fileName)
 
             if (videoFile.exists()) {
-                Log.d("MainActivity", "Loading video from absolute path: ${videoFile.absolutePath}")
+                Log.d("MainActivity", "=== VIDEO FILE DIAGNOSTICS ===")
+                Log.d("MainActivity", "File path: ${videoFile.absolutePath}")
+                Log.d("MainActivity", "File size: ${videoFile.length()} bytes (${formatBytes(videoFile.length())})")
+                Log.d("MainActivity", "File readable: ${videoFile.canRead()}")
+                Log.d("MainActivity", "File extension: ${videoFile.extension}")
+
+                // Log device information
+                Log.d("MainActivity", "=== DEVICE INFORMATION ===")
+                Log.d("MainActivity", "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                Log.d("MainActivity", "Android version: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})")
+                Log.d("MainActivity", "Hardware: ${android.os.Build.HARDWARE}")
+
                 val videoUri = Uri.fromFile(videoFile)
                 val mediaItem = MediaItem.fromUri(videoUri)
 
                 exoPlayer.setVideoSurface(surface)
+
+                // Store for potential retry
+                currentVideoUrl = videoFile.absolutePath
+                currentSurface = surface
+
+                // Add detailed event listeners
+                exoPlayer.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        val stateName = when (playbackState) {
+                            Player.STATE_IDLE -> "IDLE"
+                            Player.STATE_BUFFERING -> "BUFFERING"
+                            Player.STATE_READY -> "READY"
+                            Player.STATE_ENDED -> "ENDED"
+                            else -> "UNKNOWN"
+                        }
+                        Log.d("MainActivity", "Playback state changed: $stateName")
+
+                        // Reset attempts counter on successful playback
+                        if (playbackState == Player.STATE_READY) {
+                            playbackAttempts = 0
+                        }
+                    }
+
+                    override fun onPlayerError(error: com.google.android.exoplayer2.PlaybackException) {
+                        Log.e("MainActivity", "=== PLAYBACK ERROR ===")
+                        Log.e("MainActivity", "Error type: ${error.errorCode}")
+                        Log.e("MainActivity", "Error message: ${error.message}")
+                        Log.e("MainActivity", "Error cause: ${error.cause?.message}")
+                        Log.e("MainActivity", "Error cause type: ${error.cause?.javaClass?.simpleName}")
+                        Log.e("MainActivity", "Playback attempt: ${playbackAttempts + 1}")
+
+                        // Check if this is a decoder-related error
+                        val isDecoderError = when {
+                            // Check for specific MediaCodec decoder exceptions
+                            error.cause is com.google.android.exoplayer2.mediacodec.MediaCodecDecoderException -> {
+                                Log.e("MainActivity", "MediaCodecDecoderException detected")
+                                true
+                            }
+                            error.cause is com.google.android.exoplayer2.video.MediaCodecVideoDecoderException -> {
+                                Log.e("MainActivity", "MediaCodecVideoDecoderException detected")
+                                true
+                            }
+                            // Check error codes
+                            error.errorCode == com.google.android.exoplayer2.PlaybackException.ERROR_CODE_DECODING_FAILED -> {
+                                Log.e("MainActivity", "ERROR_CODE_DECODING_FAILED")
+                                true
+                            }
+                            error.errorCode == com.google.android.exoplayer2.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED -> {
+                                Log.e("MainActivity", "ERROR_CODE_DECODER_INIT_FAILED")
+                                true
+                            }
+                            // Check error messages
+                            error.message?.contains("decoder", ignoreCase = true) == true ||
+                            error.message?.contains("codec", ignoreCase = true) == true -> {
+                                Log.e("MainActivity", "Decoder/codec keyword in error message")
+                                true
+                            }
+                            error.cause?.message?.contains("decoder", ignoreCase = true) == true ||
+                            error.cause?.message?.contains("codec", ignoreCase = true) == true -> {
+                                Log.e("MainActivity", "Decoder/codec keyword in error cause")
+                                true
+                            }
+                            else -> {
+                                Log.e("MainActivity", "Not a decoder error")
+                                false
+                            }
+                        }
+
+                        // Implement fallback: try software decoder if hardware failed
+                        if (isDecoderError && playbackAttempts == 0) {
+                            Log.w("MainActivity", "🔄 Hardware decoder failed - attempting SOFTWARE decoder fallback...")
+                            playbackAttempts++
+
+                            mainHandler.post {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Hardware decoder failed. Trying software decoder...",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                // Retry with software decoder
+                                retryWithSoftwareDecoder()
+                            }
+                        } else {
+                            // Already tried software or not a decoder error - show error
+                            val errorMsg = if (playbackAttempts > 0) {
+                                "Video playback failed (both hardware & software decoders tried)"
+                            } else {
+                                "Video playback error: ${error.message}"
+                            }
+
+                            Log.e("MainActivity", "❌ Final error: $errorMsg")
+
+                            mainHandler.post {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    errorMsg,
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
+
+                    override fun onVideoSizeChanged(videoSize: com.google.android.exoplayer2.video.VideoSize) {
+                        Log.d("MainActivity", "=== VIDEO SIZE CHANGED ===")
+                        Log.d("MainActivity", "Resolution: ${videoSize.width}x${videoSize.height}")
+                        Log.d("MainActivity", "Pixel aspect ratio: ${videoSize.pixelWidthHeightRatio}")
+                    }
+                })
+
                 exoPlayer.setMediaItem(mediaItem)
                 exoPlayer.prepare()
                 exoPlayer.play()
-                Log.d("MainActivity", "Video loaded successfully from: ${videoFile.absolutePath}")
+                Log.d("MainActivity", "✓ Video playback initiated")
             } else {
                 Log.e("MainActivity", "Video file does not exist: ${videoFile.absolutePath}")
+                mainHandler.post {
+                    Toast.makeText(
+                        this,
+                        "Error: Video file not found",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading local video: ${e.message}", e)
+            mainHandler.post {
+                Toast.makeText(
+                    this,
+                    "Error loading video: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+            bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+            else -> "${bytes / (1024 * 1024 * 1024)} GB"
+        }
+    }
+
+    private fun retryWithSoftwareDecoder() {
+        try {
+            Log.d("MainActivity", "=== RETRYING WITH SOFTWARE DECODER ===")
+
+            // Release old player
+            exoPlayer.release()
+
+            // Create new player with software decoder preference
+            exoPlayer = createExoPlayerWithDecoder(preferSoftwareDecoder = true)
+            exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
+
+            // Retry loading the video
+            currentSurface?.let { surface ->
+                currentVideoUrl?.let { url ->
+                    if (url.startsWith("http://") || url.startsWith("https://")) {
+                        loadVideoFromUrl(surface, url)
+                    } else {
+                        loadLocalVideo(surface, url)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error retrying with software decoder: ${e.message}", e)
         }
     }
 
